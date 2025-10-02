@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.log
+*.tmp
+
+# Local virtualenv
+backend/.venv/
+
+# Build artifacts
+backend/embeddings/
+frontend/dist/
+*.egg-info/
+
+# Node
+frontend/node_modules/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Secrets / dotenv
+*.env
+.env*
+
+# (Decide about data:)
+# If your Excel is HUGE (>100MB), DON'T commit it; use Git LFS or store elsewhere.
+# If it's reasonably small and you want Render to build with it, keep it tracked.
+#backend/AIBE Parts list.xlsx
+
+# If you have LOTS of images, don't commit them all.
+# Keep a few samples and put the rest in object storage later.
+#backend/images/

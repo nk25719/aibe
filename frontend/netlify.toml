@@ -1,0 +1,8 @@
+# frontend/netlify.toml
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Replace this AFTER your Render backend deploys
+  VITE_API_BASE = "https://RENDER_BACKEND_URL_ON_RENDER"
