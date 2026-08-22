@@ -1,0 +1,30 @@
+from collections.abc import Generator
+
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.config import settings
+
+
+connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+pool_kwargs = {"poolclass": StaticPool} if settings.database_url == "sqlite:///:memory:" else {}
+engine = create_engine(settings.database_url, connect_args=connect_args, future=True, **pool_kwargs)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
+
+@event.listens_for(Engine, "connect")
+def enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
+    if settings.database_url.startswith("sqlite"):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+
+def get_db() -> Generator[Session, None, None]:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

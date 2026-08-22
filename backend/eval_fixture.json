@@ -1,0 +1,25 @@
+[
+  {
+    "label": "calibration regulator",
+    "manufacturer": "GE Healthcare",
+    "equipment_model": "E-sCaiO",
+    "visible_markings": "755534",
+    "expected_part_number": "755534-HEL",
+    "image": "images/755534-HEL 1.jpeg"
+  },
+  {
+    "label": "sample line",
+    "manufacturer": "GE Healthcare",
+    "description": "Sample Line",
+    "visible_markings": "852553",
+    "expected_part_number": "852553",
+    "image": "images/755534-HEL 1.jpeg"
+  },
+  {
+    "label": "filter fan",
+    "manufacturer": "GE Healthcare",
+    "description": "filter fan",
+    "expected_part_number": "1009-3064-000",
+    "image": "images/755534-HEL 1.jpeg"
+  }
+]

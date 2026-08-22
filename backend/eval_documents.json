@@ -1,0 +1,16 @@
+[
+  {
+    "question": "ERR-101 flow sensor voltage",
+    "manufacturer": "GE Healthcare",
+    "model": "TM-100",
+    "expected_document": "TM-100 Service Manual",
+    "expected_page": 2
+  },
+  {
+    "question": "ZX-999 procedure",
+    "manufacturer": "GE Healthcare",
+    "model": "TM-100",
+    "expected_document": null,
+    "expected_page": null
+  }
+]

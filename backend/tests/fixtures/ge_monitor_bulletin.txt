@@ -1,0 +1,2 @@
+Bulletin TB-77
+For GE Healthcare TestMonitor model TM-100 with software 2.1, intermittent ERR-101 may occur after transport. Reseat the flow sensor cable and perform functional verification. Do not replace the sensor unless the fault returns after cable reseating.

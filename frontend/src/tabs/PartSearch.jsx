@@ -4,11 +4,18 @@ import { searchParts } from "../api";
 export default function PartSearch(){
   const [q, setQ] = useState("");
   const [rows, setRows] = useState([]);
+  const [error, setError] = useState("");
 
   async function onSubmit(e){
     e.preventDefault();
-    const r = await searchParts(q, 30);
-    setRows(r.results || []);
+    setError("");
+    try {
+      const r = await searchParts(q, 30);
+      setRows(r.results || []);
+    } catch (err) {
+      setRows([]);
+      setError(err.message);
+    }
   }
 
   return (
@@ -19,6 +26,7 @@ export default function PartSearch(){
         <input id="q" name="q" value={q} onChange={e=>setQ(e.target.value)} placeholder="e.g. bearing, 1009-3172-000, brand" />
         <button type="submit" style={{marginTop:8}}>Search</button>
       </form>
+      {error && <div className="error" role="alert">{error}</div>}
 
       {rows.length ? (
         <ul className="grid">
