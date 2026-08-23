@@ -4,7 +4,7 @@ import { getCatalog, searchParts } from "../api";
 export default function PartSearch(){
   const [q, setQ] = useState("");
   const [catalog, setCatalog] = useState({ manufacturers: [], equipment_models: [], equipment_families: [] });
-  const [filters, setFilters] = useState({ manufacturer: "", equipment_model: "", enable_legacy_fallback: false });
+  const [filters, setFilters] = useState({ manufacturer: "", equipment_model: "" });
   const [rows, setRows] = useState([]);
   const [source, setSource] = useState("");
   const [error, setError] = useState("");
@@ -46,10 +46,6 @@ export default function PartSearch(){
             </select>
           </label>
         </div>
-        <label className="check-row">
-          <input type="checkbox" checked={filters.enable_legacy_fallback} onChange={(e)=>setFilters((current)=>({ ...current, enable_legacy_fallback: e.target.checked }))} />
-          Enable labeled legacy fallback
-        </label>
         <button type="submit" style={{marginTop:8}}>Search</button>
       </form>
       {error && <div className="error" role="alert">{error}</div>}

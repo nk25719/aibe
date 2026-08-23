@@ -53,7 +53,6 @@ export async function searchParts(q, limit=20, filters = {}) {
   ["manufacturer", "equipment_family", "equipment_model"].forEach((key) => {
     if (filters[key]) params.set(key, filters[key]);
   });
-  if (filters.enable_legacy_fallback) params.set("enable_legacy_fallback", "true");
   return requestJson(`${BASE}/api/search?${params}`, { cache: "no-store" });
 }
 

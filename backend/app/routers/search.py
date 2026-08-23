@@ -16,12 +16,10 @@ def api_search(
     equipment_family: str | None = Query(default=None, max_length=255),
     equipment_model: str | None = Query(default=None, max_length=255),
     include_inactive: bool = Query(default=False),
-    enable_legacy_fallback: bool | None = Query(default=None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
-    fallback = settings.enable_legacy_search_fallback if enable_legacy_fallback is None else enable_legacy_fallback
     return search_catalog(
         db,
         CatalogSearchParams(
@@ -32,6 +30,6 @@ def api_search(
             include_inactive=include_inactive,
             limit=limit,
             offset=offset,
-            enable_legacy_fallback=fallback,
+            enable_legacy_fallback=settings.enable_legacy_search_fallback,
         ),
     )
