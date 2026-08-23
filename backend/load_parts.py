@@ -1,9 +1,14 @@
-import re, json, sqlite3, pandas as pd, numpy as np
-from pathlib import Path
 import os
+import re
+import sqlite3
+from pathlib import Path
 
-SRC = Path(os.getenv("PARTS_XLSX","AIBE Parts list.xlsx"))
-OUT = Path(os.getenv("PARTS_DB_PATH","parts.db"))
+import numpy as np
+import pandas as pd
+
+BASE_DIR = Path(__file__).resolve().parent
+SRC = Path(os.getenv("PARTS_XLSX", str(BASE_DIR / "AIBE Parts list.xlsx")))
+OUT = Path(os.getenv("PARTS_DB_PATH", str(BASE_DIR / "parts.db")))
 
 def norm(s: str) -> str:
     s = str(s).strip().lower()
@@ -18,27 +23,38 @@ def main():
     df = pd.read_excel(SRC)
 
     # normalize/dedupe columns
-    seen=set(); cols=[]
+    seen = set()
+    cols = []
     for c in df.columns:
-        base = norm(c); name=base; k=2
-        while name in seen: name=f"{base}_{k}"; k+=1
-        seen.add(name); cols.append(name)
+        base = norm(c)
+        name = base
+        k = 2
+        while name in seen:
+            name = f"{base}_{k}"
+            k += 1
+        seen.add(name)
+        cols.append(name)
     df.columns = cols
 
     # trim strings
     for c in df.columns:
-        if df[c].dtype==object: df[c]=df[c].astype(str).str.strip()
+        if df[c].dtype == object:
+            df[c] = df[c].astype(str).str.strip()
     df = df.replace({np.nan: None})
 
-    if OUT.exists(): OUT.unlink()
+    if OUT.exists():
+        OUT.unlink()
     conn = sqlite3.connect(OUT)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA foreign_keys=ON;")
 
+    # Legacy flat search DB. The normalized foundation importer lives in app/services/import_parts.py.
+    # This command remains for rebuilding the prototype text-search database.
     # Surrogate PK
     cols_sql = ["row_id INTEGER PRIMARY KEY AUTOINCREMENT"]
-    for c in df.columns: cols_sql.append(f"{c} TEXT")
+    for c in df.columns:
+        cols_sql.append(f"{c} TEXT")
     conn.execute(f"CREATE TABLE parts ({', '.join(cols_sql)});")
 
     # Insert
@@ -58,7 +74,8 @@ def main():
         conn.execute(f"CREATE VIRTUAL TABLE parts_fts USING fts5({', '.join(text_cols)}, content='parts');")
         conn.execute(f"INSERT INTO parts_fts ({', '.join(text_cols)}) SELECT {', '.join(text_cols)} FROM parts;")
 
-    conn.commit(); conn.close()
+    conn.commit()
+    conn.close()
     print(f"[OK] wrote {OUT.resolve()} with {len(df)} rows and FTS on {', '.join(text_cols)}")
 
 if __name__=="__main__":

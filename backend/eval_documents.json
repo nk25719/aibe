@@ -1,0 +1,118 @@
+{
+  "dataset": {
+    "name": "aibe_non_confidential_document_retrieval_fixture",
+    "version": "2026-08-23",
+    "provenance": "curated_non_confidential_fixture_documents",
+    "warning": "This fixture is a small retrieval regression suite, not production accuracy evidence."
+  },
+  "seed_documents": [
+    {
+      "path": "tests/fixtures/ge_monitor_service_manual_rev_b.txt",
+      "manufacturer": "GE Healthcare",
+      "equipment_model": "TM-100",
+      "document_type": "service_manual",
+      "title": "TM-100 Service Manual",
+      "document_number": "TM100-SVC",
+      "revision": "B",
+      "published_at": "2026-01-01",
+      "effective_at": "2026-01-01",
+      "language": "en",
+      "source": "internal fixture",
+      "access_classification": "non_confidential_fixture"
+    },
+    {
+      "path": "tests/fixtures/ge_monitor_bulletin.txt",
+      "manufacturer": "GE Healthcare",
+      "equipment_model": "TM-100",
+      "document_type": "technical_bulletin",
+      "title": "TB-77",
+      "document_number": "TB-77",
+      "revision": "1",
+      "published_at": "2026-02-01",
+      "effective_at": "2026-02-01",
+      "language": "en",
+      "source": "internal fixture",
+      "access_classification": "non_confidential_fixture"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "doc-error-code-001",
+      "category": "exact_error_code_retrieval",
+      "question": "ERR-101 flow sensor voltage",
+      "manufacturer": "GE Healthcare",
+      "model": "TM-100",
+      "expected_document": "TM-100 Service Manual",
+      "expected_revision": "B",
+      "expected_page": 2,
+      "expected_section_contains": "ERR-101",
+      "unsupported": false,
+      "notes": "Exact error code retrieval."
+    },
+    {
+      "case_id": "doc-symptom-001",
+      "category": "symptom_based_retrieval",
+      "question": "flow sensor fault after transport",
+      "manufacturer": "GE Healthcare",
+      "model": "TM-100",
+      "expected_document": "TB-77",
+      "expected_revision": "1",
+      "expected_page": 1,
+      "expected_section_contains": "TB-77",
+      "unsupported": false,
+      "notes": "Symptom terms should retrieve cited service manual evidence."
+    },
+    {
+      "case_id": "doc-bulletin-001",
+      "category": "correct_document_revision",
+      "question": "service bulletin TB-77 firmware",
+      "manufacturer": "GE Healthcare",
+      "model": "TM-100",
+      "expected_document": "TB-77",
+      "expected_revision": "1",
+      "expected_page": 1,
+      "expected_section_contains": "TB-77",
+      "unsupported": false,
+      "notes": "Bulletin retrieval case."
+    },
+    {
+      "case_id": "doc-wrong-model-001",
+      "category": "wrong_equipment_model",
+      "question": "ERR-101 flow sensor voltage",
+      "manufacturer": "GE Healthcare",
+      "model": "TM-999",
+      "expected_document": null,
+      "expected_revision": null,
+      "expected_page": null,
+      "expected_section_contains": null,
+      "unsupported": true,
+      "notes": "Must not answer from TM-100 documents for TM-999."
+    },
+    {
+      "case_id": "doc-missing-model-001",
+      "category": "missing_equipment_context",
+      "question": "ERR-101 flow sensor voltage",
+      "manufacturer": "GE Healthcare",
+      "model": null,
+      "expected_document": null,
+      "expected_revision": null,
+      "expected_page": null,
+      "expected_section_contains": null,
+      "unsupported": true,
+      "notes": "Missing model should trigger context request rather than citation."
+    },
+    {
+      "case_id": "doc-unsupported-001",
+      "category": "unsupported_question",
+      "question": "ZX-999 procedure",
+      "manufacturer": "GE Healthcare",
+      "model": "TM-100",
+      "expected_document": null,
+      "expected_revision": null,
+      "expected_page": null,
+      "expected_section_contains": null,
+      "unsupported": true,
+      "notes": "Unknown procedure should be refused."
+    }
+  ]
+}

@@ -6,10 +6,13 @@ __pycache__/
 *.tmp
 
 # Local virtualenv
+.venv/
 backend/.venv/
 
 # Build artifacts
 backend/embeddings/
+backend/aibe_foundation.db
+backend/aibe_foundation.db-*
 frontend/dist/
 *.egg-info/
 
@@ -23,6 +26,13 @@ Thumbs.db
 # Secrets / dotenv
 *.env
 .env*
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+
+# SQLite transient files
+*.db-wal
+*.db-shm
 
 # (Decide about data:)
 # If your Excel is HUGE (>100MB), DON'T commit it; use Git LFS or store elsewhere.

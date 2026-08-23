@@ -1,0 +1,12 @@
+Safety prerequisites
+Disconnect mains power and follow lockout/tagout before removing covers. Qualified service personnel only.
+
+--- PAGE 2 ---
+Section ERR-101 Flow Sensor Fault
+For GE Healthcare TestMonitor model TM-100, error ERR-101 indicates the flow sensor signal is outside expected range. First check tubing connection and cable seating. Replace flow sensor assembly PN FS-100 only after voltage measurement fails.
+Required tools: calibrated DMM, manufacturer service fixture.
+Table 2-1 lists expected sensor supply voltage.
+
+--- PAGE 3 ---
+Section Firmware note
+Revision B applies to software 2.x. For software 1.x consult Revision A.
