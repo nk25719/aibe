@@ -1,0 +1,122 @@
+name: Bump version after PR merge
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    types:
+      - closed
+
+permissions:
+  contents: write
+
+concurrency:
+  group: version-bump-main
+  cancel-in-progress: false
+
+jobs:
+  bump-version:
+    name: Bump patch version
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout updated main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Bump patch version
+        id: version
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+
+          const packagePath = "frontend/package.json";
+          const lockPath = "frontend/package-lock.json";
+          const versionPath = "VERSION";
+
+          if (!fs.existsSync(packagePath)) {
+            throw new Error(`Missing ${packagePath}`);
+          }
+
+          const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+          const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(pkg.version);
+
+          if (!match) {
+            throw new Error(
+              `Expected semantic version in ${packagePath}, received: ${pkg.version}`
+            );
+          }
+
+          const major = Number(match[1]);
+          const minor = Number(match[2]);
+          const patch = Number(match[3]);
+          const nextVersion = `${major}.${minor}.${patch + 1}`;
+
+          pkg.version = nextVersion;
+          fs.writeFileSync(
+            packagePath,
+            JSON.stringify(pkg, null, 2) + "\n"
+          );
+
+          if (fs.existsSync(lockPath)) {
+            const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+
+            lock.version = nextVersion;
+
+            if (lock.packages && lock.packages[""]) {
+              lock.packages[""].version = nextVersion;
+            }
+
+            fs.writeFileSync(
+              lockPath,
+              JSON.stringify(lock, null, 2) + "\n"
+            );
+          }
+
+          fs.writeFileSync(versionPath, nextVersion + "\n");
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `version=${nextVersion}\n`
+          );
+
+          console.log(`Bumped version from ${pkg.version} to ${nextVersion}`);
+          NODE
+
+      - name: Commit version bump
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -- VERSION frontend/package.json
+
+          if [ -f frontend/package-lock.json ]; then
+            git add -- frontend/package-lock.json
+          fi
+
+          if git diff --cached --quiet; then
+            echo "No version changes detected."
+            exit 0
+          fi
+
+          git commit \
+            -m "chore: bump version to v${{ steps.version.outputs.version }}"
+
+          git push origin HEAD:main
+
+      - name: Write workflow summary
+        shell: bash
+        run: |
+          {
+            echo "## Version bump complete"
+            echo
+            echo "Merged PR: #${{ github.event.pull_request.number }}"
+            echo
+            echo "New version: \`${{ steps.version.outputs.version }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
