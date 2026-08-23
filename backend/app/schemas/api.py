@@ -155,6 +155,10 @@ class DocumentIngestRequest(BaseModel):
     language: str = "en"
     source: str | None = None
     access_classification: str = "internal"
+    expiration_or_superseded_at: str | None = None
+    lifecycle_status: Literal["draft", "current", "superseded", "withdrawn"] = "draft"
+    verification_status: str = "unverified"
+    notes: str | None = None
 
 
 class DocumentIngestResponse(BaseModel):
@@ -163,9 +167,62 @@ class DocumentIngestResponse(BaseModel):
     document_version_id: int
     status: str
     checksum: str
+    file_sha256: str
     pages: int
     duplicate_of_version_id: int | None = None
     errors: list[str] = []
+
+
+DocumentTypeLiteral = Literal[
+    "service_manual",
+    "user_manual",
+    "parts_catalog",
+    "technical_bulletin",
+    "field_modification",
+    "safety_notice",
+    "eol_notice",
+    "eosl_notice",
+    "replacement_notice",
+    "installation_manual",
+    "maintenance_procedure",
+    "training_material",
+    "other",
+]
+
+
+class DocumentUploadMetadata(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+    document_type: DocumentTypeLiteral
+    manufacturer: str = Field(min_length=1, max_length=255)
+    equipment_family: str | None = None
+    equipment_model: str | None = None
+    document_number: str | None = None
+    revision: str = Field(default="unknown", max_length=100)
+    published_at: str | None = None
+    effective_at: str | None = None
+    expiration_or_superseded_at: str | None = None
+    lifecycle_status: Literal["draft", "current", "superseded", "withdrawn"] = "draft"
+    language: str = "en"
+    source_url: str | None = None
+    verification_status: str = "unverified"
+    notes: str | None = None
+    uploaded_by: str | None = None
+
+
+class DocumentStateChangeRequest(BaseModel):
+    status: Literal["verified", "current", "superseded", "withdrawn"]
+    actor: str = Field(min_length=1, max_length=255)
+    superseded_by_version_id: int | None = None
+    notes: str | None = None
+
+
+class DocumentListResponse(BaseModel):
+    ok: Literal[True] = True
+    count: int
+    total: int
+    limit: int
+    offset: int
+    documents: list[dict[str, Any]]
 
 
 class TechnicalQuestionRequest(BaseModel):

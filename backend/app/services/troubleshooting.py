@@ -17,10 +17,10 @@ def create_troubleshooting_case(db: Session, payload) -> dict:
     hits = retrieve_chunks(db, query or "troubleshooting", payload.manufacturer, payload.model, limit=5)
     docs = [
         {"document_title": doc.title, "revision": version.revision, "page": chunk.page_number, "section": chunk.section}
-        for _score, chunk, version, doc in hits
+        for _score, chunk, version, doc, _evidence_scope in hits
     ]
     causes = []
-    for score, chunk, version, doc in hits[:3]:
+    for score, chunk, version, doc, _evidence_scope in hits[:3]:
         causes.append(
             {
                 "cause": chunk.section or "Documented troubleshooting item",

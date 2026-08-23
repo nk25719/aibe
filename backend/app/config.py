@@ -12,6 +12,7 @@ class Settings:
     database_url: str
     legacy_parts_db_path: Path
     embed_dir: Path
+    document_upload_dir: Path
     max_upload_bytes: int
     enable_legacy_search_fallback: bool
 
@@ -25,6 +26,7 @@ class Settings:
         self.database_url = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'aibe_foundation.db'}")
         self.legacy_parts_db_path = Path(os.getenv("PARTS_DB_PATH", str(BASE_DIR / "parts.db"))).resolve()
         self.embed_dir = Path(os.getenv("EMBED_DIR", str(BASE_DIR / "embeddings"))).resolve()
+        self.document_upload_dir = Path(os.getenv("DOCUMENT_UPLOAD_DIR", str(BASE_DIR / "document_uploads"))).resolve()
         self.max_upload_bytes = int(os.getenv("MAX_UPLOAD_BYTES", str(8 * 1024 * 1024)))
         self.enable_legacy_search_fallback = os.getenv("ENABLE_LEGACY_SEARCH_FALLBACK", "false").lower() in {"1", "true", "yes"}
 

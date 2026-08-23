@@ -16,6 +16,8 @@
       "revision": "B",
       "published_at": "2026-01-01",
       "effective_at": "2026-01-01",
+      "lifecycle_status": "current",
+      "verification_status": "verified",
       "language": "en",
       "source": "internal fixture",
       "access_classification": "non_confidential_fixture"
@@ -30,6 +32,8 @@
       "revision": "1",
       "published_at": "2026-02-01",
       "effective_at": "2026-02-01",
+      "lifecycle_status": "current",
+      "verification_status": "verified",
       "language": "en",
       "source": "internal fixture",
       "access_classification": "non_confidential_fixture"

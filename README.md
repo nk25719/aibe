@@ -20,7 +20,7 @@ Do not treat image similarity or text search as verified medical-equipment ident
 4. `/api/match-image` uses generated MobileNetV3 embeddings when available and returns candidate matches only.
 5. `/api/identification/cases` creates a guided identification case with multiple images, manufacturer/model context, optional text, OCR when available, candidate ranking, evidence, and follow-up questions.
 6. Engineer confirm/reject/uncertain actions are stored as controlled confirmation events and audit entries.
-7. Controlled document ingestion stores source metadata, checksums, page chunks, extraction status, and version history.
+7. Controlled Technical Library ingestion stores source metadata, checksums, original uploads, page chunks, extraction status, and version history.
 8. Source-grounded QA and troubleshooting retrieve cited document excerpts and log reasoning inputs.
 9. Administrative mutation endpoints require `AIBE_API_KEY`.
 
@@ -45,6 +45,30 @@ python reconcile_catalog.py
 ```
 
 Remove `parts.db` only after normalized imports cover all reviewed searchable legacy rows, unresolved ambiguity counts are accepted by the data steward, search/identification evaluations no longer require fallback, and a migration/export plan exists for any legacy-only records.
+
+## Technical Library
+
+The Technical Library is an evidence-first document workspace for biomedical service teams. It supports `service_manual`, `user_manual`, `parts_catalog`, `technical_bulletin`, `field_modification`, `safety_notice`, `eol_notice`, `eosl_notice`, `replacement_notice`, `installation_manual`, `maintenance_procedure`, `training_material`, and `other`.
+
+PDF upload is protected by `AIBE_API_KEY`. Uploaded files are stored under `DOCUMENT_UPLOAD_DIR` and are not intended for Git. `MAX_UPLOAD_BYTES` bounds upload size. Ingestion validates PDF MIME type and extension, preserves the original upload, computes a SHA-256 checksum, detects duplicate uploads, extracts page-aware text, and stores chunks with page numbers. The canonical checksum field is `file_sha256`; migration `0006` backfills it from the legacy `file_sha1` column without discarding existing checksum data. Do not upload confidential manuals to a shared repository.
+
+Document revisions are preserved as separate versions. Lifecycle states are `draft`, `current`, `superseded`, and `withdrawn`; verification is tracked separately. A new revision must not overwrite an older file or extracted chunks. Supersession links reject self-supersession and practical circular references.
+
+Technical QA returns cautious answers with document title, document number, revision, document type, manufacturer/model scope, page number, section heading when detected, exact excerpt, lifecycle status, source URL, and retrieval score. Retrieval prefers verified/current evidence, excludes withdrawn versions, searches historical revisions only when requested, and reports conflicting current revisions instead of silently choosing one. AIBE refuses unsupported answers and will not invent page numbers, revisions, procedures, part numbers, EOL/EOSL dates, or replacement products.
+
+AIBE is decision support, not repair authority; qualified biomedical engineering review and manufacturer documentation remain required.
+
+Useful Technical Library commands:
+
+```bash
+cd /Users/naghamkheir/Repos/aibe/backend
+source .venv/bin/activate
+alembic upgrade head
+python -m pytest
+python evaluate_documents.py
+python manage.py audit-catalog
+python reconcile_catalog.py
+```
 
 ## Local Setup
 

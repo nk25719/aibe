@@ -98,3 +98,55 @@ export async function exportDataQualityIssues(apiKey, filters = {}) {
   if (!r.ok) throw new Error(text || `Request failed with ${r.status}`);
   return text;
 }
+
+export async function listDocuments(filters = {}) {
+  const params = new URLSearchParams();
+  ["q", "manufacturer", "model", "document_type", "revision", "lifecycle_status", "verification_status"].forEach((key) => {
+    if (filters[key]) params.set(key, filters[key]);
+  });
+  if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.offset) params.set("offset", String(filters.offset));
+  const suffix = params.toString() ? `?${params}` : "";
+  return requestJson(`${BASE}/api/documents${suffix}`, { cache: "no-store" });
+}
+
+export async function getDocument(documentId) {
+  return requestJson(`${BASE}/api/documents/${documentId}`, { cache: "no-store" });
+}
+
+export async function getDocumentVersions(documentId) {
+  return requestJson(`${BASE}/api/documents/${documentId}/versions`, { cache: "no-store" });
+}
+
+export async function getDocumentIngestionStatus(documentId) {
+  return requestJson(`${BASE}/api/documents/${documentId}/ingestion-status`, { cache: "no-store" });
+}
+
+export async function askTechnicalQuestion(payload) {
+  return requestJson(`${BASE}/api/documents/qa`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadTechnicalDocument(apiKey, file, metadata) {
+  const fd = new FormData();
+  fd.append("file", file);
+  Object.entries(metadata).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") fd.append(key, value);
+  });
+  return requestJson(`${BASE}/api/documents/upload`, {
+    method: "POST",
+    headers: adminHeaders(apiKey),
+    body: fd,
+  });
+}
+
+export async function updateDocumentVersionState(apiKey, versionId, payload) {
+  return requestJson(`${BASE}/api/documents/versions/${versionId}/state`, {
+    method: "POST",
+    headers: adminHeaders(apiKey, { "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+}
