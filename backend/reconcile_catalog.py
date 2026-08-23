@@ -8,7 +8,7 @@ from app.services.legacy_search import get_legacy_conn
 from app.services.normalization import normalize_key, normalize_label
 
 
-def main() -> None:
+def build_reconciliation_report() -> dict:
     with get_legacy_conn() as conn:
         legacy_rows = [dict(row) for row in conn.execute("SELECT rowid AS id, * FROM parts")]
     legacy_by_part = {}
@@ -38,7 +38,7 @@ def main() -> None:
             legacy_descriptions = {row.get("description") for row in rows if row.get("description")}
             if part.description and legacy_descriptions and part.description not in legacy_descriptions:
                 description_differences.append({"part_number": part.part_number, "normalized": part.description, "legacy": sorted(legacy_descriptions)})
-        report = {
+        return {
             "legacy_searchable_parts": len(legacy_by_part),
             "normalized_searchable_parts": len(normalized_by_part),
             "missing_normalized_records": missing_normalized[:100],
@@ -50,10 +50,13 @@ def main() -> None:
             "description_differences": description_differences,
             "records_available_only_through_fallback": missing_normalized[:100],
             "source_rows": db.query(ImportSourceRow).count(),
-            "unresolved_ambiguity_count": db.query(DataQualityIssue).filter(DataQualityIssue.status == "open").count(),
+            "open_data_quality_issue_count": db.query(DataQualityIssue).filter(DataQualityIssue.status == "open").count(),
             "note": "This report does not modify data. Review differences with source evidence before changing normalized records.",
         }
-    print(json.dumps(report, indent=2, sort_keys=True))
+
+
+def main() -> None:
+    print(json.dumps(build_reconciliation_report(), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

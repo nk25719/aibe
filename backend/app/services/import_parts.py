@@ -552,13 +552,28 @@ def list_import_runs(db: Session) -> list[dict[str, Any]]:
     ]
 
 
-def list_data_quality_issues(db: Session, status: str | None = None, issue_type: str | None = None) -> list[dict[str, Any]]:
+def list_data_quality_issues(
+    db: Session,
+    status: str | None = None,
+    issue_type: str | None = None,
+    manufacturer: str | None = None,
+    equipment_model: str | None = None,
+    source_import_id: int | None = None,
+) -> list[dict[str, Any]]:
     stmt = select(DataQualityIssue).order_by(DataQualityIssue.id.desc())
     if status:
         stmt = stmt.where(DataQualityIssue.status == DataQualityIssueStatus(status))
     if issue_type:
         stmt = stmt.where(DataQualityIssue.issue_type == issue_type)
+    if source_import_id:
+        stmt = stmt.where(DataQualityIssue.source_import_id == source_import_id)
     issues = db.scalars(stmt).all()
+    if manufacturer:
+        wanted = normalize_label(manufacturer)
+        issues = [issue for issue in issues if normalize_label((issue.evidence or {}).get("manufacturer")) == wanted]
+    if equipment_model:
+        wanted_model = normalize_label(equipment_model)
+        issues = [issue for issue in issues if normalize_label((issue.evidence or {}).get("equipment_model")) == wanted_model]
     rows_by_id = {
         row.id: row
         for row in db.scalars(
@@ -586,6 +601,15 @@ def list_data_quality_issues(db: Session, status: str | None = None, issue_type:
             "conflicting_values": issue.conflicting_values,
             "evidence": issue.evidence,
             "audit_history": issue.audit_history or [],
+            "issue_category": {
+                "missing_manufacturer": "missing information",
+                "missing_or_invalid_part_number": "system/import error",
+                "duplicate_part_conflicting_description": "conflicting information",
+                "same_part_number_different_manufacturer": "conflicting information",
+                "suspected_model_number_as_part_number": "possible duplicate",
+                "orphan_or_redundant_alias": "possible duplicate",
+                "changed_source_row": "system/import error",
+            }.get(issue.issue_type, "unverified information"),
             "source_row_values": rows_by_id.get(issue.source_row_id).raw_values if issue.source_row_id in rows_by_id else None,
             "normalized_values": rows_by_id.get(issue.source_row_id).normalized_values if issue.source_row_id in rows_by_id else None,
         }

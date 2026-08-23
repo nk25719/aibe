@@ -180,6 +180,22 @@ Parts imports create immutable `import_runs` and `import_source_rows` records. E
 
 Ambiguous imports create persistent `data_quality_issues`; duplicates are not silently merged. Current deterministic checks include duplicate part numbers with conflicting descriptions, missing or invalid part numbers, missing manufacturer, changed source rows, and redundant aliases. The issue model supports open, under_review, resolved, accepted_as_distinct, merged, and ignored_with_reason statuses, plus resolution notes, resolver, timestamp, supporting evidence, and audit history.
 
+Catalog metrics use distinct definitions:
+
+- `latest_import` metrics describe only the newest import run, including its created source rows and row statuses.
+- `latest_import.accepted_rows` means inserted, updated, or skipped rows only; inserted, updated, skipped, ambiguous, rejected, and created source-row counts are also reported explicitly.
+- `historical_imports` metrics are cumulative across all import runs; preserved source rows are append-only audit records.
+- `canonical_catalog` metrics describe unique operational catalog records such as parts, aliases, manufacturers, models, and compatibility links.
+- Aliases are alternate identifiers linked to canonical parts.
+- Compatibility links connect canonical parts to normalized equipment models.
+- Data-quality issues are review tasks, not necessarily severe defects; missing optional manufacturer/model context is separated from conflicting technical values.
+- Issue summaries use `requires_manual_source_evidence` to flag cases that need source-backed steward, engineer, or manufacturer evidence. Missing manufacturer requires manual source evidence; redundant/orphan alias suggestions do not require the same level of manual source evidence, though steward review is still required before mutation.
+- Normalized values are the operational source of truth, but they are not automatically manufacturer-verified.
+- Steward-reviewed values are administrative catalog corrections.
+- Engineer-confirmed identifications are case-specific decisions and do not automatically rewrite manufacturer catalog truth.
+- AI suggestions remain candidates unless confirmed by an engineer.
+- A previously reported `147 inserted` import result cannot be reconciled as a row count with the current 133-row spreadsheet unless historical evidence establishes that it counted multiple entity types, such as manufacturers, models, families, and parts.
+
 Protected admin endpoints require `AIBE_API_KEY`:
 
 ```bash
@@ -189,6 +205,18 @@ curl -H "X-AIBE-API-Key: $AIBE_API_KEY" "http://127.0.0.1:8080/api/admin/data-qu
 ```
 
 The frontend has a `Data Review` tab for data stewards. It uses the admin key but does not implement production role management; production deployments still need identity, authorization, and audit policy decisions.
+
+Read-only catalog audit:
+
+```bash
+cd backend
+source .venv/bin/activate
+python manage.py audit-catalog
+python manage.py audit-catalog --summary
+python manage.py audit-catalog --idempotency-check
+```
+
+The audit command reports spreadsheet lineage, import/source-row counts, normalized catalog counts, issue breakdowns, duplicate issue identities, legacy reconciliation, metric definitions, and optional isolated idempotency results. It does not modify production data unless `--idempotency-check` is used, and that check runs against a temporary isolated database.
 
 ## Manual Smoke Test
 

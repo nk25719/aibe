@@ -6,6 +6,7 @@ from app.db.models import DataQualityIssueStatus
 from app.db.session import get_db
 from app.schemas.api import ImportReportResponse
 from app.security import require_admin
+from app.services.catalog_audit import build_catalog_audit_report
 from app.services.import_parts import (
     export_issues,
     import_parts_spreadsheet,
@@ -33,9 +34,28 @@ def import_runs(db: Session = Depends(get_db)):
 def data_quality_issues(
     status: str | None = Query(default=None),
     issue_type: str | None = Query(default=None),
+    manufacturer: str | None = Query(default=None),
+    equipment_model: str | None = Query(default=None),
+    source_import_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    return {"ok": True, "issues": list_data_quality_issues(db, status=status, issue_type=issue_type)}
+    return {
+        "ok": True,
+        "issues": list_data_quality_issues(
+            db,
+            status=status,
+            issue_type=issue_type,
+            manufacturer=manufacturer,
+            equipment_model=equipment_model,
+            source_import_id=source_import_id,
+        ),
+    }
+
+
+@router.get("/data-quality/summary")
+def data_quality_summary(db: Session = Depends(get_db)):
+    report = build_catalog_audit_report(db, include_idempotency=False)
+    return {"ok": True, "summary": report}
 
 
 class ResolveIssueRequest(BaseModel):

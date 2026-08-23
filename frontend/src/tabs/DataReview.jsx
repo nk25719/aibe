@@ -1,5 +1,5 @@
 import React from "react";
-import { exportDataQualityIssues, getDataQualityIssues, getImportRuns, resolveDataQualityIssue } from "../api";
+import { exportDataQualityIssues, getDataQualityIssues, getDataQualitySummary, getImportRuns, resolveDataQualityIssue } from "../api";
 
 const STATUS_OPTIONS = ["open", "under_review", "resolved", "accepted_as_distinct", "merged", "ignored_with_reason"];
 
@@ -13,6 +13,8 @@ export default function DataReview() {
   const [runs, setRuns] = React.useState([]);
   const [issues, setIssues] = React.useState([]);
   const [status, setStatus] = React.useState("open");
+  const [filters, setFilters] = React.useState({ manufacturer: "", equipment_model: "", source_import_id: "" });
+  const [summary, setSummary] = React.useState(null);
   const [selectedId, setSelectedId] = React.useState(null);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -35,10 +37,12 @@ export default function DataReview() {
     try {
       const [runPayload, issuePayload] = await Promise.all([
         getImportRuns(apiKey),
-        getDataQualityIssues(apiKey, { status }),
+        getDataQualityIssues(apiKey, { status, ...filters }),
       ]);
+      const summaryPayload = await getDataQualitySummary(apiKey);
       setRuns(runPayload.runs);
       setIssues(issuePayload.issues);
+      setSummary(summaryPayload.summary);
       setSelectedId(issuePayload.issues[0]?.id ?? null);
     } catch (err) {
       setError(err.message);
@@ -49,7 +53,7 @@ export default function DataReview() {
 
   React.useEffect(() => {
     if (apiKey) refresh();
-  }, [status]);
+  }, [status, filters.manufacturer, filters.equipment_model, filters.source_import_id]);
 
   async function submitResolution(event) {
     event.preventDefault();
@@ -108,6 +112,52 @@ export default function DataReview() {
             {STATUS_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
         </label>
+        <div className="form-grid">
+          <label>
+            Manufacturer
+            <input value={filters.manufacturer} onChange={(event) => setFilters({ ...filters, manufacturer: event.target.value })} placeholder="canonical name" />
+          </label>
+          <label>
+            Equipment model
+            <input value={filters.equipment_model} onChange={(event) => setFilters({ ...filters, equipment_model: event.target.value })} placeholder="model" />
+          </label>
+          <label>
+            Source import
+            <select value={filters.source_import_id} onChange={(event) => setFilters({ ...filters, source_import_id: event.target.value })}>
+              <option value="">Any import</option>
+              {runs.map((run) => <option key={run.id} value={run.id}>Run #{run.id}</option>)}
+            </select>
+          </label>
+        </div>
+        {summary ? (
+          <div className="summary-cards">
+            <div><strong>{summary.issues.open_issues}</strong><span>open issues</span></div>
+            <div><strong>{summary.issues.blocking_ambiguity_count}</strong><span>blocking ambiguities</span></div>
+            <div><strong>{summary.canonical_catalog.unique_parts}</strong><span>canonical parts</span></div>
+            <div><strong>{summary.canonical_catalog.parts_without_manufacturer}</strong><span>parts missing manufacturer</span></div>
+            <div><strong>{summary.issues.duplicate_issue_group_count}</strong><span>duplicate warnings</span></div>
+          </div>
+        ) : null}
+        {summary ? (
+          <div className="summary-table">
+            <h3>Issue Breakdown</h3>
+            {Object.entries(summary.issues.by_type_details).map(([type, detail]) => (
+              <article key={type} className="run-row">
+                <strong>{type}</strong>
+                <span>{detail.count} ({detail.percentage}%)</span>
+                <span>{detail.category}</span>
+                <span>{detail.blocks_search || detail.blocks_identification ? "blocking" : "non-blocking"}</span>
+              </article>
+            ))}
+            <h3>Severity</h3>
+            {Object.entries(summary.issues.by_severity).map(([severity, count]) => (
+              <article key={severity} className="run-row">
+                <strong>{severity}</strong>
+                <span>{count}</span>
+              </article>
+            ))}
+          </div>
+        ) : null}
         <div className="summary-table">
           <h3>Import Runs</h3>
           {runs.length ? runs.map((run) => (
@@ -145,6 +195,7 @@ export default function DataReview() {
               >
                 <strong>{issue.issue_type}</strong>
                 <span>{issue.entity_type} #{issue.entity_id || "source"}</span>
+                <span>{issue.issue_category}</span>
                 <span className={`pill ${issue.severity === "high" ? "warn" : ""}`}>{issue.severity}</span>
               </button>
             )) : <p className="empty">No issues match this filter.</p>}

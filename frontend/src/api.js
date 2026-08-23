@@ -69,8 +69,15 @@ export async function getDataQualityIssues(apiKey, filters = {}) {
   const params = new URLSearchParams();
   if (filters.status) params.set("status", filters.status);
   if (filters.issue_type) params.set("issue_type", filters.issue_type);
+  if (filters.manufacturer) params.set("manufacturer", filters.manufacturer);
+  if (filters.equipment_model) params.set("equipment_model", filters.equipment_model);
+  if (filters.source_import_id) params.set("source_import_id", filters.source_import_id);
   const suffix = params.toString() ? `?${params}` : "";
   return requestJson(`${BASE}/api/admin/data-quality/issues${suffix}`, { cache: "no-store", headers: adminHeaders(apiKey) });
+}
+
+export async function getDataQualitySummary(apiKey) {
+  return requestJson(`${BASE}/api/admin/data-quality/summary`, { cache: "no-store", headers: adminHeaders(apiKey) });
 }
 
 export async function resolveDataQualityIssue(apiKey, issueId, payload) {
