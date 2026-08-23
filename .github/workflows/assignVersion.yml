@@ -54,6 +54,7 @@ jobs:
           const major = Number(match[1]);
           const minor = Number(match[2]);
           const patch = Number(match[3]);
+          const previousVersion = pkg.version;
           const nextVersion = `${major}.${minor}.${patch + 1}`;
 
           pkg.version = nextVersion;
@@ -84,7 +85,7 @@ jobs:
             `version=${nextVersion}\n`
           );
 
-          console.log(`Bumped version from ${pkg.version} to ${nextVersion}`);
+          console.log(`Bumped version from ${previousVersion} to ${nextVersion}`);
           NODE
 
       - name: Commit version bump
