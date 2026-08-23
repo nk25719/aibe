@@ -26,6 +26,8 @@ from app.db.models import (
     ManufacturerAlias,
     Part,
     PartAlias,
+    PartModelCompatibility,
+    PartSupersession,
     SourceEvidence,
     SourceType,
 )
@@ -287,7 +289,7 @@ def import_parts_spreadsheet(db: Session, source_path: Path = DEFAULT_PARTS_XLSX
         row_changed = bool(previous_row_sha1 and previous_row_sha1 != row_sha1)
 
         manufacturer = _get_or_create_manufacturer(db, brand, report)
-        _get_or_create_model(db, equipment, category, manufacturer, report)
+        model = _get_or_create_model(db, equipment, category, manufacturer, report)
 
         evidence = SourceEvidence(
             source_type=SourceType.spreadsheet,
@@ -416,10 +418,13 @@ def import_parts_spreadsheet(db: Session, source_path: Path = DEFAULT_PARTS_XLSX
                 )
         else:
             part = Part(
+                manufacturer_id=manufacturer.id if manufacturer else None,
                 part_number=part_number,
                 normalized_part_number=normalized_part_number,
                 description=description,
                 natural_description=natural_description,
+                verification_status="source_imported_unverified",
+                data_origin="normalized_spreadsheet_import",
                 raw_values=raw,
                 provenance=provenance,
             )
@@ -428,6 +433,8 @@ def import_parts_spreadsheet(db: Session, source_path: Path = DEFAULT_PARTS_XLSX
             report.inserted += 1
             source_row_record.row_status = "inserted"
         source_row_record.part_id = part.id
+        if manufacturer and part.manufacturer_id != manufacturer.id and not source_row_record.row_status == "ambiguous":
+            part.manufacturer_id = manufacturer.id
 
         if alternate:
             normalized_alias = normalize_key(alternate)
@@ -448,6 +455,17 @@ def import_parts_spreadsheet(db: Session, source_path: Path = DEFAULT_PARTS_XLSX
                             alias_type="alternate",
                         )
                     )
+
+        if model:
+            existing_compatibility = db.scalar(
+                select(PartModelCompatibility).where(
+                    PartModelCompatibility.part_id == part.id,
+                    PartModelCompatibility.model_id == model.id,
+                    PartModelCompatibility.configuration_id.is_(None),
+                )
+            )
+            if not existing_compatibility:
+                db.add(PartModelCompatibility(part_id=part.id, model_id=model.id, evidence_id=evidence.id))
 
         if not brand:
             _create_or_update_issue(
@@ -588,6 +606,15 @@ def resolve_data_quality_issue(
     issue = db.get(DataQualityIssue, issue_id)
     if not issue:
         raise ValueError("issue_not_found")
+    if status == DataQualityIssueStatus.merged:
+        raise ValueError("merge_preview_required")
+    applied_change = _apply_resolution_to_catalog(
+        db,
+        issue,
+        resolution_selected=resolution_selected,
+        resolution_notes=resolution_notes,
+        evidence=evidence or {},
+    )
     now = datetime.utcnow()
     issue.status = status
     issue.resolution_selected = resolution_selected
@@ -604,12 +631,108 @@ def resolve_data_quality_issue(
             "resolution_selected": resolution_selected,
             "resolved_by": resolved_by,
             "notes": resolution_notes,
+            "applied_change": applied_change,
         }
     )
     issue.audit_history = history
     db.add(AuditEvent(actor=resolved_by, action="data_quality_issue_resolved", entity_type="data_quality_issue", entity_id=str(issue.id), details=history[-1]))
     db.commit()
     return next(item for item in list_data_quality_issues(db, status=status.value) if item["id"] == issue_id)
+
+
+def _apply_resolution_to_catalog(
+    db: Session,
+    issue: DataQualityIssue,
+    *,
+    resolution_selected: str,
+    resolution_notes: str,
+    evidence: dict[str, Any],
+) -> dict[str, Any] | None:
+    if issue.entity_type != "part" or not issue.entity_id:
+        return None
+    part = db.get(Part, int(issue.entity_id))
+    if not part:
+        return None
+    if resolution_selected in {"accepted_as_distinct", "ignored_with_reason", "note_only"}:
+        return None
+    if resolution_selected == "canonical_description":
+        value = clean_text(evidence.get("canonical_description") or evidence.get("canonical_value") or resolution_notes)
+        if not value:
+            raise ValueError("missing_canonical_description")
+        before = part.description
+        part.description = value
+        part.verification_status = "administrator_resolved"
+        part.provenance = {**(part.provenance or {}), "resolution_issue_id": issue.id}
+        return {"field": "description", "before": before, "after": value}
+    if resolution_selected == "canonical_part_number":
+        value = clean_text(evidence.get("canonical_part_number") or evidence.get("canonical_value"))
+        normalized = normalize_key(value)
+        if not value or not normalized:
+            raise ValueError("missing_canonical_part_number")
+        existing = db.scalar(
+            select(Part).where(
+                (Part.normalized_part_number == normalized) | (Part.part_number == value),
+                Part.id != part.id,
+            )
+        )
+        if existing and existing.manufacturer_id != part.manufacturer_id:
+            raise ValueError("cross_manufacturer_merge_forbidden")
+        before = part.part_number
+        part.part_number = value
+        part.normalized_part_number = normalized
+        part.verification_status = "administrator_resolved"
+        return {"field": "part_number", "before": before, "after": value}
+    if resolution_selected == "add_alias":
+        value = clean_text(evidence.get("alias") or evidence.get("canonical_value"))
+        normalized = normalize_key(value)
+        if not value or not normalized:
+            raise ValueError("missing_alias")
+        existing = db.scalar(
+            select(PartAlias).where(
+                PartAlias.part_id == part.id,
+                PartAlias.normalized_alias == normalized,
+                PartAlias.alias_type == "reviewed_alias",
+            )
+        )
+        if not existing:
+            db.add(PartAlias(part_id=part.id, alias=value, normalized_alias=normalized, alias_type="reviewed_alias"))
+        part.verification_status = "administrator_resolved"
+        return {"field": "alias", "after": value}
+    return None
+
+
+def preview_merge_resolution(db: Session, issue_id: int, target_part_id: int) -> dict[str, Any]:
+    issue = db.get(DataQualityIssue, issue_id)
+    if not issue or issue.entity_type != "part" or not issue.entity_id:
+        raise ValueError("issue_not_found")
+    source = db.get(Part, int(issue.entity_id))
+    target = db.get(Part, target_part_id)
+    if not source or not target:
+        raise ValueError("part_not_found")
+    if source.manufacturer_id and target.manufacturer_id and source.manufacturer_id != target.manufacturer_id:
+        raise ValueError("cross_manufacturer_merge_forbidden")
+    return {
+        "ok": True,
+        "allowed": True,
+        "source_part": {"id": source.id, "part_number": source.part_number, "manufacturer_id": source.manufacturer_id},
+        "target_part": {"id": target.id, "part_number": target.part_number, "manufacturer_id": target.manufacturer_id},
+        "would_preserve_source_rows": True,
+        "would_move_aliases": True,
+        "requires_explicit_followup": True,
+    }
+
+
+def validate_supersession(db: Session, old_part_id: int, new_part_id: int) -> None:
+    if old_part_id == new_part_id:
+        raise ValueError("supersession_loop_forbidden")
+    seen = {old_part_id}
+    current = new_part_id
+    while current:
+        if current in seen:
+            raise ValueError("supersession_loop_forbidden")
+        seen.add(current)
+        link = db.scalar(select(PartSupersession).where(PartSupersession.old_part_id == current))
+        current = link.new_part_id if link else None
 
 
 def export_issues(issues: list[dict[str, Any]], fmt: str) -> str:

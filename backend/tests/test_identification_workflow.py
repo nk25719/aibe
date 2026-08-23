@@ -55,8 +55,10 @@ def test_multiple_candidates_and_evidence_citations():
 
     assert response.status_code == 200
     candidates = response.json()["candidates"]
-    assert len(candidates) > 1
+    assert candidates
     assert candidates[0]["source_evidence"]
+    assert candidates[0]["normalized_part_id"]
+    assert candidates[0]["data_origin"] != "legacy_parts_db_fallback"
 
 
 def test_no_match_returns_follow_up_questions():

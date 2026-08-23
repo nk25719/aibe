@@ -48,8 +48,13 @@ export async function actOnCandidate(caseId, candidateId, action, user, notes) {
   });
 }
 
-export async function searchParts(q, limit=20) {
-  return requestJson(`${BASE}/api/search?q=${encodeURIComponent(q)}&limit=${limit}`, { cache: "no-store" });
+export async function searchParts(q, limit=20, filters = {}) {
+  const params = new URLSearchParams({ q, limit: String(limit) });
+  ["manufacturer", "equipment_family", "equipment_model"].forEach((key) => {
+    if (filters[key]) params.set(key, filters[key]);
+  });
+  if (filters.enable_legacy_fallback) params.set("enable_legacy_fallback", "true");
+  return requestJson(`${BASE}/api/search?${params}`, { cache: "no-store" });
 }
 
 function adminHeaders(apiKey, extra = {}) {

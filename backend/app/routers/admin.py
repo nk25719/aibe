@@ -10,6 +10,7 @@ from app.services.import_parts import (
     export_issues,
     import_parts_spreadsheet,
     list_data_quality_issues,
+    preview_merge_resolution,
     list_import_runs,
     resolve_data_quality_issue,
 )
@@ -57,9 +58,21 @@ def resolve_issue(issue_id: int, payload: ResolveIssueRequest, db: Session = Dep
             resolved_by=payload.resolved_by,
             evidence=payload.evidence,
         )
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Data-quality issue not found.")
+    except ValueError as exc:
+        if str(exc) == "issue_not_found":
+            raise HTTPException(status_code=404, detail="Data-quality issue not found.")
+        raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True, "issue": issue}
+
+
+@router.get("/data-quality/issues/{issue_id}/merge-preview")
+def merge_preview(issue_id: int, target_part_id: int = Query(..., ge=1), db: Session = Depends(get_db)):
+    try:
+        return preview_merge_resolution(db, issue_id, target_part_id)
+    except ValueError as exc:
+        if str(exc) == "issue_not_found":
+            raise HTTPException(status_code=404, detail="Data-quality issue not found.")
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/data-quality/issues/export")

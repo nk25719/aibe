@@ -8,7 +8,7 @@ Do not treat image similarity or text search as verified medical-equipment ident
 
 - `backend/`: FastAPI application, legacy SQLite search DB, normalized SQLAlchemy foundation, Alembic config, importer, and image embedding tooling.
 - `frontend/`: React/Vite UI with Identify and Search tabs.
-- `backend/parts.db`: existing flat prototype search database with FTS.
+- `backend/parts.db`: deprecated flat prototype search database with FTS; retained for explicit fallback and reconciliation only.
 - `backend/AIBE Parts list.xlsx`: source spreadsheet used by both the legacy loader and the new idempotent importer.
 - `backend/images/`: sample part images used by the image embedding prototype.
 
@@ -16,13 +16,35 @@ Do not treat image similarity or text search as verified medical-equipment ident
 
 1. Spreadsheet rows are preserved as raw values.
 2. `python manage.py import-parts` imports them into the normalized foundation DB without overwriting the source spreadsheet or legacy DB.
-3. Existing `/api/search` still reads the flat `parts.db` FTS workflow for compatibility.
+3. `/api/search` reads the normalized SQLAlchemy catalog by default. Legacy `parts.db` fallback is explicit and labeled.
 4. `/api/match-image` uses generated MobileNetV3 embeddings when available and returns candidate matches only.
 5. `/api/identification/cases` creates a guided identification case with multiple images, manufacturer/model context, optional text, OCR when available, candidate ranking, evidence, and follow-up questions.
 6. Engineer confirm/reject/uncertain actions are stored as controlled confirmation events and audit entries.
 7. Controlled document ingestion stores source metadata, checksums, page chunks, extraction status, and version history.
 8. Source-grounded QA and troubleshooting retrieve cited document excerpts and log reasoning inputs.
 9. Administrative mutation endpoints require `AIBE_API_KEY`.
+
+## Normalized Catalog Authority
+
+The normalized SQLAlchemy database is the operational source of truth for part search, identification candidate retrieval, manufacturer/family/model options, aliases, compatibility links, supersession status, source evidence, and data-quality resolutions.
+
+Legacy `backend/parts.db` is deprecated as an operational source. It is used only when fallback is explicitly enabled:
+
+```bash
+export ENABLE_LEGACY_SEARCH_FALLBACK=false
+```
+
+Fallback responses are visibly labeled with `source: "legacy_fallback"`, `legacy_fallback_used: true`, and `data_origin: "legacy_parts_db_fallback"`. AIBE does not silently combine conflicting normalized and legacy values.
+
+Run a non-mutating reconciliation report:
+
+```bash
+cd backend
+source .venv/bin/activate
+python reconcile_catalog.py
+```
+
+Remove `parts.db` only after normalized imports cover all reviewed searchable legacy rows, unresolved ambiguity counts are accepted by the data steward, search/identification evaluations no longer require fallback, and a migration/export plan exists for any legacy-only records.
 
 ## Local Setup
 
@@ -62,7 +84,7 @@ curl "http://127.0.0.1:8080/api/search?q=filter&limit=3"
 
 The Identify workspace supports multiple image upload with preview/removal, required manufacturer context, optional equipment family/model, description, visible markings or partial part number, and component location/function.
 
-Candidate retrieval combines supported structured fields, legacy text search signals, optional OCR text, and image similarity when embeddings exist. Every result remains an AI candidate until a qualified engineer confirms it. Rejected and uncertain actions are retained for audit and future evaluation.
+Candidate retrieval combines normalized catalog records, supported structured fields, aliases, compatibility context, optional OCR text, and image similarity when embeddings exist. Every result remains an AI candidate until a qualified engineer confirms it. A verified catalog record is not the same as an engineer-confirmed identification. Rejected and uncertain actions are retained for audit and future evaluation.
 
 Each candidate can show the official part number, description, manufacturer, compatible equipment text available from the current data, supported evidence, match factors, contradictions, confidence level, verification status, and external commercial lookup status. Price and availability are intentionally not core technical truth.
 

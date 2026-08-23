@@ -18,21 +18,39 @@ class HealthResponse(BaseModel):
 
 
 class SearchResult(BaseModel):
-    id: int
+    id: int | None = None
+    normalized_part_id: int | None = None
     part_number: str | None = None
     alternate_pn: str | None = None
+    aliases: list[dict[str, Any]] = []
     description: str | None = None
+    official_description: str | None = None
     equipment1: str | None = None
     brand: str | None = None
+    manufacturer: str | None = None
+    manufacturer_id: int | None = None
     eq_category: str | None = None
     natural_description: str | None = None
+    compatible_models: list[dict[str, Any]] = []
+    compatibility_limitations: list[dict[str, Any]] = []
+    supersession: dict[str, Any] | None = None
+    verification_status: str | None = None
+    source_evidence: list[dict[str, Any]] = []
+    data_origin: str | None = None
+    legacy_fallback_used: bool = False
+    rank_score: float | None = None
+    match_factors: list[dict[str, Any]] = []
+    contradicting_evidence: list[dict[str, Any]] = []
 
 
 class SearchResponse(BaseModel):
     ok: Literal[True] = True
     count: int
+    total: int | None = None
     limit: int
     offset: int
+    source: str | None = None
+    legacy_fallback_used: bool = False
     results: list[SearchResult]
 
 
@@ -61,6 +79,11 @@ class ImportReportResponse(BaseModel):
 class CatalogOption(BaseModel):
     value: str
     label: str
+    id: int | None = None
+    aliases: list[str] = []
+    manufacturer_id: int | None = None
+    family_id: int | None = None
+    active: bool = True
 
 
 class CatalogResponse(BaseModel):
@@ -77,7 +100,14 @@ class IdentificationCandidateResponse(BaseModel):
     official_description: str | None = None
     manufacturer: str | None = None
     compatible_equipment_models: list[str] = []
-    replacement_or_superseding_part: str | None = None
+    replacement_or_superseding_part: Any | None = None
+    normalized_part_id: int | None = None
+    aliases: list[dict[str, Any]] = []
+    manufacturer_id: int | None = None
+    compatibility_limitations: list[dict[str, Any]] = []
+    catalog_verification_status: str | None = None
+    data_origin: str | None = None
+    legacy_fallback_used: bool = False
     supporting_images: list[str] = []
     source_evidence: list[dict[str, Any]] = []
     match_factors: list[dict[str, Any]] = []
