@@ -13,6 +13,7 @@ class Settings:
     legacy_parts_db_path: Path
     embed_dir: Path
     max_upload_bytes: int
+    enable_legacy_search_fallback: bool
 
     def __init__(self) -> None:
         self.api_key = os.getenv("AIBE_API_KEY")
@@ -25,6 +26,7 @@ class Settings:
         self.legacy_parts_db_path = Path(os.getenv("PARTS_DB_PATH", str(BASE_DIR / "parts.db"))).resolve()
         self.embed_dir = Path(os.getenv("EMBED_DIR", str(BASE_DIR / "embeddings"))).resolve()
         self.max_upload_bytes = int(os.getenv("MAX_UPLOAD_BYTES", str(8 * 1024 * 1024)))
+        self.enable_legacy_search_fallback = os.getenv("ENABLE_LEGACY_SEARCH_FALLBACK", "false").lower() in {"1", "true", "yes"}
 
 
 settings = Settings()

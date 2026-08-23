@@ -15,6 +15,15 @@ os.environ.setdefault("PARTS_DB_PATH", str(BACKEND / "parts.db"))
 os.environ.setdefault("EMBED_DIR", str(BACKEND / "missing-test-embeddings"))
 
 from app.db.models import Base  # noqa: E402
+from app.db.session import SessionLocal, engine  # noqa: E402
+from app.services.import_parts import import_parts_spreadsheet  # noqa: E402
+
+
+@pytest.fixture(scope="session", autouse=True)
+def normalized_app_catalog():
+    Base.metadata.create_all(engine)
+    with SessionLocal() as session:
+        import_parts_spreadsheet(session)
 
 
 @pytest.fixture()

@@ -1,7 +1,6 @@
 import hashlib
 import io
 import re
-import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,7 +8,6 @@ from fastapi import HTTPException, UploadFile
 from PIL import Image
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.db.models import (
     AuditEvent,
     IdentificationCandidate,
@@ -20,6 +18,7 @@ from app.db.models import (
     SourceEvidence,
     SourceType,
 )
+from app.services.catalog_query import CatalogSearchParams, search_catalog
 from app.services.image_index import embed_pil, image_index, read_validated_image_upload
 from app.services.normalization import clean_text, normalize_key
 
@@ -37,12 +36,6 @@ class CaseInput:
     component_location: str | None = None
     opened_by: str | None = None
     top_k: int = 5
-
-
-def _legacy_rows() -> list[dict[str, Any]]:
-    with sqlite3.connect(settings.legacy_parts_db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        return [dict(row) for row in conn.execute("SELECT rowid AS id, * FROM parts")]
 
 
 def _tokens(text: str | None) -> set[str]:
@@ -69,18 +62,19 @@ def _ocr_image(_raw: bytes) -> dict[str, Any]:
         return {"available": False, "text": "", "method": "pytesseract", "message": str(exc)}
 
 
-def _score_row(row: dict[str, Any], case_input: CaseInput, query_tokens: set[str], image_scores: dict[str, float]) -> tuple[float, list[dict[str, Any]], list[dict[str, Any]]]:
+def _score_catalog_result(row: dict[str, Any], case_input: CaseInput, query_tokens: set[str], image_scores: dict[str, float]) -> tuple[float, list[dict[str, Any]], list[dict[str, Any]]]:
     score = 0.0
-    factors: list[dict[str, Any]] = []
-    contradictions: list[dict[str, Any]] = []
+    factors: list[dict[str, Any]] = list(row.get("match_factors") or [])
+    contradictions: list[dict[str, Any]] = list(row.get("contradicting_evidence") or [])
 
-    brand = clean_text(row.get("brand"))
-    equipment = clean_text(row.get("equipment1"))
+    brand = clean_text(row.get("manufacturer") or row.get("brand"))
     family = clean_text(row.get("eq_category"))
     part_number = clean_text(row.get("part_number"))
     alternate = clean_text(row.get("alternate_pn"))
-    description = clean_text(row.get("description"))
+    aliases = [clean_text(alias.get("alias")) for alias in row.get("aliases", [])]
+    description = clean_text(row.get("official_description") or row.get("description"))
     natural = clean_text(row.get("natural_description"))
+    compatible_models = [model.get("model_name") for model in row.get("compatible_models", [])]
 
     if _safe_contains(brand, case_input.manufacturer) or _safe_contains(case_input.manufacturer, brand):
         score += 0.25
@@ -90,11 +84,11 @@ def _score_row(row: dict[str, Any], case_input: CaseInput, query_tokens: set[str
         score -= 0.12
 
     if case_input.equipment_model:
-        if _safe_contains(equipment, case_input.equipment_model) or _safe_contains(case_input.equipment_model, equipment):
+        if any(_safe_contains(model, case_input.equipment_model) or _safe_contains(case_input.equipment_model, model) for model in compatible_models):
             score += 0.18
-            factors.append({"type": "equipment_model", "detail": f"Equipment model matches {equipment}."})
-        elif equipment:
-            contradictions.append({"type": "equipment_model", "detail": f"Candidate equipment is {equipment}."})
+            factors.append({"type": "equipment_model", "detail": f"Equipment model matches {case_input.equipment_model}."})
+        elif compatible_models:
+            contradictions.append({"type": "equipment_model", "detail": f"Compatible models are {', '.join(filter(None, compatible_models))}."})
             score -= 0.08
 
     if case_input.equipment_family:
@@ -102,16 +96,16 @@ def _score_row(row: dict[str, Any], case_input: CaseInput, query_tokens: set[str
             score += 0.08
             factors.append({"type": "equipment_family", "detail": f"Equipment family matches {family}."})
 
-    row_text = " ".join([part_number or "", alternate or "", description or "", natural or ""]).lower()
+    row_text = " ".join([part_number or "", alternate or "", " ".join(filter(None, aliases)), description or "", natural or ""]).lower()
     matched_tokens = [token for token in query_tokens if token and token in row_text]
     if matched_tokens:
         token_score = min(0.35, 0.08 * len(matched_tokens))
         score += token_score
         factors.append({"type": "text_or_ocr", "detail": f"Matched tokens: {', '.join(sorted(matched_tokens))}."})
     normalized_part = normalize_key(part_number)
-    normalized_alias = normalize_key(alternate)
+    normalized_aliases = {normalize_key(alias) for alias in aliases + [alternate]}
     exact_marking_hits = [
-        token for token in query_tokens if token and token in {normalized_part, normalized_alias}
+        token for token in query_tokens if token and token in ({normalized_part} | {alias for alias in normalized_aliases if alias})
     ]
     if exact_marking_hits:
         score += 0.45
@@ -136,31 +130,30 @@ def _confidence_level(score: float, contradictions: list[dict[str, Any]]) -> str
 
 
 def _candidate_snapshot(row: dict[str, Any], score: float, level: str, factors, contradictions, evidence_id: int | None) -> dict[str, Any]:
-    evidence = [
-        {
-            "source_type": "spreadsheet",
-            "source": "AIBE Parts list.xlsx / legacy parts.db",
-            "revision": None,
-            "page": None,
-            "figure": None,
-            "section": f"legacy row {row.get('id')}",
-            "evidence_id": evidence_id,
-        }
-    ]
+    evidence = list(row.get("source_evidence") or [])
+    if evidence_id:
+        evidence.append({"source_type": "system", "source": "normalized catalog retrieval", "evidence_id": evidence_id})
     return {
+        "normalized_part_id": row.get("normalized_part_id"),
         "part_name": row.get("natural_description") or row.get("description"),
         "official_part_number": row.get("part_number"),
-        "official_description": row.get("description"),
-        "manufacturer": row.get("brand"),
-        "compatible_equipment_models": [row.get("equipment1")] if clean_text(row.get("equipment1")) else [],
-        "replacement_or_superseding_part": None,
+        "official_description": row.get("official_description") or row.get("description"),
+        "manufacturer": row.get("manufacturer") or row.get("brand"),
+        "manufacturer_id": row.get("manufacturer_id"),
+        "aliases": row.get("aliases") or [],
+        "compatible_equipment_models": [model.get("model_name") for model in row.get("compatible_models", []) if clean_text(model.get("model_name"))],
+        "compatibility_limitations": row.get("compatibility_limitations") or [],
+        "replacement_or_superseding_part": row.get("supersession"),
         "supporting_images": [],
         "source_evidence": evidence,
         "match_factors": factors,
         "contradicting_evidence": contradictions,
         "confidence_score": round(score, 3),
         "confidence_level": level,
-        "verification_status": "candidate",
+        "verification_status": "verified_catalog_record" if row.get("verification_status") in {"administrator_resolved", "engineer_verified"} else "candidate",
+        "catalog_verification_status": row.get("verification_status"),
+        "data_origin": row.get("data_origin"),
+        "legacy_fallback_used": row.get("legacy_fallback_used", False),
         "commercial_lookup_status": "not_configured",
     }
 
@@ -217,10 +210,22 @@ async def create_identification_case(db: Session, case_input: CaseInput, files: 
     for value in text_inputs.values():
         query_tokens |= _tokens(value)
 
-    rows = _legacy_rows()
+    catalog_query = " ".join(filter(None, [case_input.visible_markings, case_input.description, " ".join(extracted_texts)]))
+    catalog_response = search_catalog(
+        db,
+        CatalogSearchParams(
+            q=catalog_query,
+            manufacturer=case_input.manufacturer,
+            equipment_family=case_input.equipment_family,
+            equipment_model=case_input.equipment_model,
+            limit=max(case_input.top_k * 3, case_input.top_k),
+            enable_legacy_fallback=False,
+        ),
+    )
+    rows = catalog_response["results"]
     scored = []
     for row in rows:
-        score, factors, contradictions = _score_row(row, case_input, query_tokens, image_scores)
+        score, factors, contradictions = _score_catalog_result(row, case_input, query_tokens, image_scores)
         if score > 0:
             scored.append((score, row, factors, contradictions))
     scored.sort(key=lambda item: item[0], reverse=True)
@@ -230,10 +235,10 @@ async def create_identification_case(db: Session, case_input: CaseInput, files: 
     for score, row, factors, contradictions in selected:
         evidence = SourceEvidence(
             source_type=SourceType.spreadsheet,
-            internal_reference=f"AIBE Parts list.xlsx / parts.db row {row.get('id')}",
-            extraction_method="structured_text_image_candidate_retrieval",
+            internal_reference=f"normalized part {row.get('normalized_part_id')}",
+            extraction_method="normalized_catalog_structured_text_ocr_image_candidate_retrieval",
             confidence=round(score, 3),
-            notes="Candidate evidence only; engineer confirmation required.",
+            notes="Normalized catalog candidate evidence only; engineer confirmation required.",
         )
         db.add(evidence)
         db.flush()
@@ -244,11 +249,12 @@ async def create_identification_case(db: Session, case_input: CaseInput, files: 
             status=IdentificationStatus.candidate if level != "probable" else IdentificationStatus.probable_match,
             score=round(score, 3),
             confidence_level=level,
-            method="structured_text_ocr_image_similarity",
+            method="normalized_catalog_structured_text_ocr_image_similarity",
             match_factors={"items": factors},
             contradicting_evidence={"items": contradictions},
             candidate_snapshot=snapshot,
             evidence_id=evidence.id,
+            part_id=row.get("normalized_part_id"),
         )
         db.add(candidate)
         db.flush()

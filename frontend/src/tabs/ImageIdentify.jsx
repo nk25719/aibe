@@ -94,19 +94,25 @@ export default function ImageIdentify(){
         <form onSubmit={onSubmit} className="case-form">
           <div className="form-grid">
             <label>Manufacturer
-              <input list="manufacturers" value={form.manufacturer} onChange={(e)=>updateField("manufacturer", e.target.value)} required />
+              <select value={form.manufacturer} onChange={(e)=>updateField("manufacturer", e.target.value)} required>
+                <option value="">Select manufacturer</option>
+                {catalog.manufacturers.map((m)=><option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
             </label>
-            <datalist id="manufacturers">{catalog.manufacturers.map((m)=><option key={m.value} value={m.value} />)}</datalist>
 
             <label>Equipment family
-              <input list="families" value={form.equipment_family} onChange={(e)=>updateField("equipment_family", e.target.value)} />
+              <select value={form.equipment_family} onChange={(e)=>updateField("equipment_family", e.target.value)}>
+                <option value="">Any family</option>
+                {catalog.equipment_families.map((m)=><option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
             </label>
-            <datalist id="families">{catalog.equipment_families.map((m)=><option key={m.value} value={m.value} />)}</datalist>
 
             <label>Equipment model
-              <input list="models" value={form.equipment_model} onChange={(e)=>updateField("equipment_model", e.target.value)} />
+              <select value={form.equipment_model} onChange={(e)=>updateField("equipment_model", e.target.value)}>
+                <option value="">Any model</option>
+                {catalog.equipment_models.map((m)=><option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
             </label>
-            <datalist id="models">{catalog.equipment_models.map((m)=><option key={m.value} value={m.value} />)}</datalist>
 
             <label>Engineer
               <input value={form.opened_by} onChange={(e)=>updateField("opened_by", e.target.value)} placeholder="name or initials" />
@@ -176,11 +182,13 @@ export default function ImageIdentify(){
                   </div>
                   <dl className="details">
                     <div><dt>Manufacturer</dt><dd>{candidate.manufacturer || "Unknown"}</dd></div>
+                    <div><dt>Catalog ID</dt><dd>{candidate.normalized_part_id || "Legacy only"}</dd></div>
                     <div><dt>Description</dt><dd>{candidate.official_description || "Not available"}</dd></div>
                     <div><dt>Compatible models</dt><dd>{candidate.compatible_equipment_models.join(", ") || "Not supported by current data"}</dd></div>
-                    <div><dt>Supersession</dt><dd>{candidate.replacement_or_superseding_part || "No supported supersession"}</dd></div>
+                    <div><dt>Supersession</dt><dd>{candidate.replacement_or_superseding_part?.is_superseded ? candidate.replacement_or_superseding_part.replacements.map((p)=>p.part_number).join(", ") : "No supported supersession"}</dd></div>
                     <div><dt>Verification</dt><dd>{candidate.verification_status}</dd></div>
-                    <div><dt>Commercial lookup</dt><dd>{candidate.commercial_lookup_status}</dd></div>
+                    <div><dt>Catalog status</dt><dd>{candidate.catalog_verification_status || "unknown"}</dd></div>
+                    <div><dt>Data origin</dt><dd>{candidate.data_origin || "unknown"} {candidate.legacy_fallback_used ? "(legacy fallback)" : ""}</dd></div>
                   </dl>
                   <section className="evidence">
                     <h4>Match Factors</h4>

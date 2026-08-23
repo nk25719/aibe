@@ -6,10 +6,12 @@ from app.db.models import DataQualityIssueStatus
 from app.db.session import get_db
 from app.schemas.api import ImportReportResponse
 from app.security import require_admin
+from app.services.catalog_audit import build_catalog_audit_report
 from app.services.import_parts import (
     export_issues,
     import_parts_spreadsheet,
     list_data_quality_issues,
+    preview_merge_resolution,
     list_import_runs,
     resolve_data_quality_issue,
 )
@@ -32,9 +34,28 @@ def import_runs(db: Session = Depends(get_db)):
 def data_quality_issues(
     status: str | None = Query(default=None),
     issue_type: str | None = Query(default=None),
+    manufacturer: str | None = Query(default=None),
+    equipment_model: str | None = Query(default=None),
+    source_import_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    return {"ok": True, "issues": list_data_quality_issues(db, status=status, issue_type=issue_type)}
+    return {
+        "ok": True,
+        "issues": list_data_quality_issues(
+            db,
+            status=status,
+            issue_type=issue_type,
+            manufacturer=manufacturer,
+            equipment_model=equipment_model,
+            source_import_id=source_import_id,
+        ),
+    }
+
+
+@router.get("/data-quality/summary")
+def data_quality_summary(db: Session = Depends(get_db)):
+    report = build_catalog_audit_report(db, include_idempotency=False)
+    return {"ok": True, "summary": report}
 
 
 class ResolveIssueRequest(BaseModel):
@@ -57,9 +78,21 @@ def resolve_issue(issue_id: int, payload: ResolveIssueRequest, db: Session = Dep
             resolved_by=payload.resolved_by,
             evidence=payload.evidence,
         )
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Data-quality issue not found.")
+    except ValueError as exc:
+        if str(exc) == "issue_not_found":
+            raise HTTPException(status_code=404, detail="Data-quality issue not found.")
+        raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True, "issue": issue}
+
+
+@router.get("/data-quality/issues/{issue_id}/merge-preview")
+def merge_preview(issue_id: int, target_part_id: int = Query(..., ge=1), db: Session = Depends(get_db)):
+    try:
+        return preview_merge_resolution(db, issue_id, target_part_id)
+    except ValueError as exc:
+        if str(exc) == "issue_not_found":
+            raise HTTPException(status_code=404, detail="Data-quality issue not found.")
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/data-quality/issues/export")

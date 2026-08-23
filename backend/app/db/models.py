@@ -137,12 +137,16 @@ class EquipmentConfiguration(TimestampMixin, Base):
 class Part(TimestampMixin, Base):
     __tablename__ = "parts"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    manufacturer_id: Mapped[int | None] = mapped_column(ForeignKey("manufacturers.id"), index=True)
     part_number: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     normalized_part_number: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text)
     natural_description: Mapped[str | None] = mapped_column(Text)
+    verification_status: Mapped[str] = mapped_column(String(100), default="source_imported_unverified", nullable=False, index=True)
+    data_origin: Mapped[str] = mapped_column(String(100), default="normalized_import", nullable=False, index=True)
     raw_values: Mapped[dict | None] = mapped_column(JSON)
     provenance: Mapped[dict | None] = mapped_column(JSON)
+    manufacturer: Mapped[Manufacturer | None] = relationship()
     aliases: Mapped[list["PartAlias"]] = relationship(back_populates="part", cascade="all, delete-orphan")
     images: Mapped[list["PartImage"]] = relationship(back_populates="part")
 

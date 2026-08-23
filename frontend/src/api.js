@@ -48,8 +48,13 @@ export async function actOnCandidate(caseId, candidateId, action, user, notes) {
   });
 }
 
-export async function searchParts(q, limit=20) {
-  return requestJson(`${BASE}/api/search?q=${encodeURIComponent(q)}&limit=${limit}`, { cache: "no-store" });
+export async function searchParts(q, limit=20, filters = {}) {
+  const params = new URLSearchParams({ q, limit: String(limit) });
+  ["manufacturer", "equipment_family", "equipment_model"].forEach((key) => {
+    if (filters[key]) params.set(key, filters[key]);
+  });
+  if (filters.enable_legacy_fallback) params.set("enable_legacy_fallback", "true");
+  return requestJson(`${BASE}/api/search?${params}`, { cache: "no-store" });
 }
 
 function adminHeaders(apiKey, extra = {}) {
@@ -64,8 +69,15 @@ export async function getDataQualityIssues(apiKey, filters = {}) {
   const params = new URLSearchParams();
   if (filters.status) params.set("status", filters.status);
   if (filters.issue_type) params.set("issue_type", filters.issue_type);
+  if (filters.manufacturer) params.set("manufacturer", filters.manufacturer);
+  if (filters.equipment_model) params.set("equipment_model", filters.equipment_model);
+  if (filters.source_import_id) params.set("source_import_id", filters.source_import_id);
   const suffix = params.toString() ? `?${params}` : "";
   return requestJson(`${BASE}/api/admin/data-quality/issues${suffix}`, { cache: "no-store", headers: adminHeaders(apiKey) });
+}
+
+export async function getDataQualitySummary(apiKey) {
+  return requestJson(`${BASE}/api/admin/data-quality/summary`, { cache: "no-store", headers: adminHeaders(apiKey) });
 }
 
 export async function resolveDataQualityIssue(apiKey, issueId, payload) {
