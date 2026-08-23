@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { actOnCandidate, apiHealth, createIdentificationCase, searchParts } from "./api";
+import {
+  actOnCandidate,
+  apiHealth,
+  createIdentificationCase,
+  getDataQualityIssues,
+  getImportRuns,
+  exportDataQualityIssues,
+  resolveDataQualityIssue,
+  searchParts,
+} from "./api";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -60,5 +69,55 @@ describe("api helpers", () => {
     const [, options] = fetchMock.mock.calls[0];
     expect(options.method).toBe("POST");
     expect(JSON.parse(options.body).action).toBe("confirm");
+  });
+
+  it("calls protected data review endpoints with the admin key", async () => {
+    const fetchMock = vi.fn(() => mockResponse({ body: JSON.stringify({ ok: true, runs: [] }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getImportRuns("secret");
+
+    const [, options] = fetchMock.mock.calls[0];
+    expect(options.headers["X-AIBE-API-Key"]).toBe("secret");
+  });
+
+  it("passes data-quality filters through query params", async () => {
+    const fetchMock = vi.fn(() => mockResponse({ body: JSON.stringify({ ok: true, issues: [] }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getDataQualityIssues("secret", { status: "open", issue_type: "duplicate_part_conflicting_description" });
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).toContain("status=open");
+    expect(url).toContain("issue_type=duplicate_part_conflicting_description");
+  });
+
+  it("records data-quality issue resolutions", async () => {
+    const fetchMock = vi.fn(() => mockResponse({ body: JSON.stringify({ ok: true, issue: { id: 7 } }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await resolveDataQualityIssue("secret", 7, {
+      status: "accepted_as_distinct",
+      resolution_selected: "accepted_as_distinct",
+      resolution_notes: "fixture review",
+      resolved_by: "nk",
+    });
+
+    const [, options] = fetchMock.mock.calls[0];
+    expect(options.method).toBe("POST");
+    expect(options.headers["X-AIBE-API-Key"]).toBe("secret");
+    expect(JSON.parse(options.body).resolved_by).toBe("nk");
+  });
+
+  it("exports data-quality issues with the admin key", async () => {
+    const fetchMock = vi.fn(() => mockResponse({ body: "id,status\n1,open\n" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const csv = await exportDataQualityIssues("secret", { status: "open" });
+
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toContain("format=csv");
+    expect(options.headers["X-AIBE-API-Key"]).toBe("secret");
+    expect(csv).toContain("id,status");
   });
 });

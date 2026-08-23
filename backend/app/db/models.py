@@ -46,6 +46,20 @@ class SourceType(str, enum.Enum):
     url = "url"
 
 
+class ImportRunStatus(str, enum.Enum):
+    completed = "completed"
+    failed = "failed"
+
+
+class DataQualityIssueStatus(str, enum.Enum):
+    open = "open"
+    under_review = "under_review"
+    resolved = "resolved"
+    accepted_as_distinct = "accepted_as_distinct"
+    merged = "merged"
+    ignored_with_reason = "ignored_with_reason"
+
+
 class Manufacturer(TimestampMixin, Base):
     __tablename__ = "manufacturers"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -131,6 +145,72 @@ class Part(TimestampMixin, Base):
     provenance: Mapped[dict | None] = mapped_column(JSON)
     aliases: Mapped[list["PartAlias"]] = relationship(back_populates="part", cascade="all, delete-orphan")
     images: Mapped[list["PartImage"]] = relationship(back_populates="part")
+
+
+class ImportRun(Base):
+    __tablename__ = "import_runs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    source_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    source_name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    source_sha1: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    importer_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[ImportRunStatus] = mapped_column(Enum(ImportRunStatus), default=ImportRunStatus.completed, nullable=False)
+    inserted_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    ambiguous_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rejected_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    changed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    summary: Mapped[dict | None] = mapped_column(JSON)
+
+
+class ImportSourceRow(Base):
+    __tablename__ = "import_source_rows"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    import_run_id: Mapped[int] = mapped_column(ForeignKey("import_runs.id"), nullable=False, index=True)
+    source_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    source_name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    source_sha1: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_row: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    row_key: Mapped[str] = mapped_column(String(700), nullable=False, index=True)
+    row_sha1: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    previous_row_sha1: Mapped[str | None] = mapped_column(String(64))
+    row_status: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    rejection_reason: Mapped[str | None] = mapped_column(String(255))
+    raw_values: Mapped[dict] = mapped_column(JSON, nullable=False)
+    normalized_values: Mapped[dict | None] = mapped_column(JSON)
+    part_id: Mapped[int | None] = mapped_column(ForeignKey("parts.id"), index=True)
+    evidence_id: Mapped[int | None] = mapped_column(ForeignKey("source_evidence.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    __table_args__ = (UniqueConstraint("import_run_id", "source_row", name="uq_import_source_row_run_row"),)
+
+
+class DataQualityIssue(Base):
+    __tablename__ = "data_quality_issues"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    issue_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    entity_id: Mapped[str | None] = mapped_column(String(255), index=True)
+    source_import_id: Mapped[int | None] = mapped_column(ForeignKey("import_runs.id"), index=True)
+    source_row_id: Mapped[int | None] = mapped_column(ForeignKey("import_source_rows.id"), index=True)
+    source_row: Mapped[int | None] = mapped_column(Integer, index=True)
+    original_values: Mapped[dict | None] = mapped_column(JSON)
+    conflicting_values: Mapped[dict | None] = mapped_column(JSON)
+    severity: Mapped[str] = mapped_column(String(50), default="medium", nullable=False, index=True)
+    status: Mapped[DataQualityIssueStatus] = mapped_column(
+        Enum(DataQualityIssueStatus), default=DataQualityIssueStatus.open, nullable=False, index=True
+    )
+    suggested_resolution: Mapped[str | None] = mapped_column(Text)
+    resolution_selected: Mapped[str | None] = mapped_column(String(100))
+    resolution_notes: Mapped[str | None] = mapped_column(Text)
+    resolved_by: Mapped[str | None] = mapped_column(String(255))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime)
+    evidence: Mapped[dict | None] = mapped_column(JSON)
+    audit_history: Mapped[list | None] = mapped_column(JSON)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
 
 
 class PartAlias(TimestampMixin, Base):

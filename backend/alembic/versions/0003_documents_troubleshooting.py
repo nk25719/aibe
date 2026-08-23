@@ -16,6 +16,22 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    def has_table(table):
+        return table in inspector.get_table_names()
+
+    def add_column_if_missing(table, column):
+        columns = {item["name"] for item in inspector.get_columns(table)}
+        if column.name not in columns:
+            op.add_column(table, column)
+
+    def create_index_if_missing(name, table, columns):
+        indexes = {item["name"] for item in inspector.get_indexes(table)}
+        if name not in indexes:
+            op.create_index(name, table, columns)
+
     for column in [
         sa.Column("document_number", sa.String(length=255), nullable=True),
         sa.Column("manufacturer_text", sa.String(length=255), nullable=True),
@@ -26,13 +42,13 @@ def upgrade() -> None:
         sa.Column("ingestion_status", sa.String(length=100), nullable=True),
         sa.Column("ingestion_errors", sa.JSON(), nullable=True),
     ]:
-        op.add_column("documents", column)
+        add_column_if_missing("documents", column)
     for name in ["document_number", "manufacturer_text", "equipment_family_text", "equipment_model_text", "ingestion_status"]:
-        op.create_index(f"ix_documents_{name}", "documents", [name])
-    op.add_column("document_versions", sa.Column("effective_at", sa.Date(), nullable=True))
-    op.add_column("document_versions", sa.Column("source_path", sa.String(length=1000), nullable=True))
-    op.add_column("document_versions", sa.Column("duplicate_of_version_id", sa.Integer(), nullable=True))
-    op.create_index("ix_document_versions_duplicate_of_version_id", "document_versions", ["duplicate_of_version_id"])
+        create_index_if_missing(f"ix_documents_{name}", "documents", [name])
+    add_column_if_missing("document_versions", sa.Column("effective_at", sa.Date(), nullable=True))
+    add_column_if_missing("document_versions", sa.Column("source_path", sa.String(length=1000), nullable=True))
+    add_column_if_missing("document_versions", sa.Column("duplicate_of_version_id", sa.Integer(), nullable=True))
+    create_index_if_missing("ix_document_versions_duplicate_of_version_id", "document_versions", ["duplicate_of_version_id"])
     for column in [
         sa.Column("chunk_index", sa.Integer(), nullable=True),
         sa.Column("extraction_method", sa.String(length=100), nullable=True),
@@ -40,31 +56,32 @@ def upgrade() -> None:
         sa.Column("figure_refs", sa.JSON(), nullable=True),
         sa.Column("search_text", sa.Text(), nullable=True),
     ]:
-        op.add_column("document_chunks", column)
-    op.create_table(
-        "troubleshooting_cases",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("manufacturer", sa.String(length=255), nullable=False),
-        sa.Column("model", sa.String(length=255), nullable=True),
-        sa.Column("serial", sa.String(length=255), nullable=True),
-        sa.Column("configuration", sa.String(length=255), nullable=True),
-        sa.Column("hardware_version", sa.String(length=255), nullable=True),
-        sa.Column("software_version", sa.String(length=255), nullable=True),
-        sa.Column("error_code", sa.String(length=255), nullable=True),
-        sa.Column("symptom_description", sa.Text(), nullable=True),
-        sa.Column("measurements", sa.Text(), nullable=True),
-        sa.Column("operating_context", sa.Text(), nullable=True),
-        sa.Column("actions_attempted", sa.Text(), nullable=True),
-        sa.Column("service_history", sa.Text(), nullable=True),
-        sa.Column("status", sa.String(length=100), nullable=False),
-        sa.Column("response_snapshot", sa.JSON(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False),
-    )
-    op.create_index("ix_troubleshooting_cases_manufacturer", "troubleshooting_cases", ["manufacturer"])
-    op.create_index("ix_troubleshooting_cases_model", "troubleshooting_cases", ["model"])
-    op.create_index("ix_troubleshooting_cases_error_code", "troubleshooting_cases", ["error_code"])
+        add_column_if_missing("document_chunks", column)
+    if not has_table("troubleshooting_cases"):
+        op.create_table(
+            "troubleshooting_cases",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("manufacturer", sa.String(length=255), nullable=False),
+            sa.Column("model", sa.String(length=255), nullable=True),
+            sa.Column("serial", sa.String(length=255), nullable=True),
+            sa.Column("configuration", sa.String(length=255), nullable=True),
+            sa.Column("hardware_version", sa.String(length=255), nullable=True),
+            sa.Column("software_version", sa.String(length=255), nullable=True),
+            sa.Column("error_code", sa.String(length=255), nullable=True),
+            sa.Column("symptom_description", sa.Text(), nullable=True),
+            sa.Column("measurements", sa.Text(), nullable=True),
+            sa.Column("operating_context", sa.Text(), nullable=True),
+            sa.Column("actions_attempted", sa.Text(), nullable=True),
+            sa.Column("service_history", sa.Text(), nullable=True),
+            sa.Column("status", sa.String(length=100), nullable=False),
+            sa.Column("response_snapshot", sa.JSON(), nullable=True),
+            sa.Column("created_at", sa.DateTime(), nullable=False),
+            sa.Column("updated_at", sa.DateTime(), nullable=False),
+            sa.Column("is_active", sa.Boolean(), nullable=False),
+        )
+    create_index_if_missing("ix_troubleshooting_cases_manufacturer", "troubleshooting_cases", ["manufacturer"])
+    create_index_if_missing("ix_troubleshooting_cases_model", "troubleshooting_cases", ["model"])
+    create_index_if_missing("ix_troubleshooting_cases_error_code", "troubleshooting_cases", ["error_code"])
 
 
 def downgrade() -> None:

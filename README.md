@@ -82,7 +82,7 @@ OCR is opportunistic. If `pytesseract` and a system OCR engine are not installed
 
 ## Evaluation
 
-A tiny non-confidential fixture lives at `backend/eval_fixture.json`.
+A small non-confidential fixture lives at `backend/eval_fixture.json`. Cases are labeled with case ID, input type, query text, partial part number, manufacturer/model context, image paths, acceptable candidates, excluded parts, evidence expectation, difficulty, and notes.
 
 Run:
 
@@ -92,17 +92,9 @@ source .venv/bin/activate
 python evaluate_identification.py
 ```
 
-The output reports top-1 and top-k retrieval on that fixture only. It is a smoke evaluation, not evidence of production accuracy.
+The output reports top-1, top-3, top-5, mean reciprocal rank, no-match correctness, manufacturer/model filter checks, unsupported-confirmation rate, and per-category results. The fixture mixes curated non-confidential and synthetic negative cases. It is a regression check, not evidence of production accuracy or confidence calibration.
 
-Current fixture result from the local development run:
-
-```text
-cases: 3
-top-1: 1.0
-top-k: 1.0
-```
-
-Because the fixture is tiny and partly text-driven, this should only be read as a regression check.
+Confidential or engineer-confirmed evaluation data should live outside public commits. Add real reviewed cases later by following the same JSON structure and marking their provenance explicitly.
 
 ## Technical Documents
 
@@ -158,7 +150,38 @@ source .venv/bin/activate
 python evaluate_documents.py
 ```
 
-The evaluator reports citation accuracy, unsupported-question refusal, and troubleshooting evidence count on tiny fixtures only.
+The evaluator reports retrieval hit rate, citation document/revision/page accuracy, unsupported-question refusal accuracy, cross-model contamination rate, extracted-fact/inference separation, per-category results, and troubleshooting evidence count. These are small fixture checks only.
+
+## Data-Quality Review
+
+Parts imports create immutable `import_runs` and `import_source_rows` records. Each row preserves raw source values, normalized values, row fingerprint, source file checksum, row status, and evidence linkage. Re-importing the same file is idempotent for normalized technical records while still recording a new import run and source-row trail. Changed source rows are flagged explicitly.
+
+Ambiguous imports create persistent `data_quality_issues`; duplicates are not silently merged. Current deterministic checks include duplicate part numbers with conflicting descriptions, missing or invalid part numbers, missing manufacturer, changed source rows, and redundant aliases. The issue model supports open, under_review, resolved, accepted_as_distinct, merged, and ignored_with_reason statuses, plus resolution notes, resolver, timestamp, supporting evidence, and audit history.
+
+Protected admin endpoints require `AIBE_API_KEY`:
+
+```bash
+curl -H "X-AIBE-API-Key: $AIBE_API_KEY" http://127.0.0.1:8080/api/admin/import-runs
+curl -H "X-AIBE-API-Key: $AIBE_API_KEY" http://127.0.0.1:8080/api/admin/data-quality/issues
+curl -H "X-AIBE-API-Key: $AIBE_API_KEY" "http://127.0.0.1:8080/api/admin/data-quality/issues/export?format=csv&status=open"
+```
+
+The frontend has a `Data Review` tab for data stewards. It uses the admin key but does not implement production role management; production deployments still need identity, authorization, and audit policy decisions.
+
+## Manual Smoke Test
+
+1. Start the backend and frontend using the setup commands above.
+2. Search by exact part number in the Search tab.
+3. Search by description in the Search tab.
+4. Create an image-identification case with manufacturer and model context.
+5. Confirm one candidate, then reject a candidate, and verify both actions succeed.
+6. Run `python manage.py import-parts`, then open Data Review.
+7. Verify ambiguous import records for duplicate descriptions are visible, including source and normalized values.
+8. Resolve a test conflict with `accepted_as_distinct` or `ignored_with_reason` and a note.
+9. Ask a supported document question such as `ERR-101 flow sensor voltage`.
+10. Ask an unsupported question such as `ZX-999 procedure` and verify AIBE refuses to invent an answer.
+11. Verify citations show document title, revision, page, and section.
+12. Restart the backend and verify import runs, issues, and review decisions persist.
 
 ## Data Governance
 
@@ -202,6 +225,9 @@ erDiagram
   equipment_configurations ||--o{ part_model_compatibility : constrains
   parts ||--o{ part_supersessions : old_part
   parts ||--o{ part_supersessions : new_part
+  import_runs ||--o{ import_source_rows : contains
+  import_runs ||--o{ data_quality_issues : raises
+  import_source_rows ||--o{ data_quality_issues : supports
   documents ||--o{ document_versions : has
   document_versions ||--o{ document_chunks : contains
   document_versions ||--o{ document_links : links

@@ -51,3 +51,39 @@ export async function actOnCandidate(caseId, candidateId, action, user, notes) {
 export async function searchParts(q, limit=20) {
   return requestJson(`${BASE}/api/search?q=${encodeURIComponent(q)}&limit=${limit}`, { cache: "no-store" });
 }
+
+function adminHeaders(apiKey, extra = {}) {
+  return { ...extra, "X-AIBE-API-Key": apiKey };
+}
+
+export async function getImportRuns(apiKey) {
+  return requestJson(`${BASE}/api/admin/import-runs`, { cache: "no-store", headers: adminHeaders(apiKey) });
+}
+
+export async function getDataQualityIssues(apiKey, filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.issue_type) params.set("issue_type", filters.issue_type);
+  const suffix = params.toString() ? `?${params}` : "";
+  return requestJson(`${BASE}/api/admin/data-quality/issues${suffix}`, { cache: "no-store", headers: adminHeaders(apiKey) });
+}
+
+export async function resolveDataQualityIssue(apiKey, issueId, payload) {
+  return requestJson(`${BASE}/api/admin/data-quality/issues/${issueId}/resolve`, {
+    method: "POST",
+    headers: adminHeaders(apiKey, { "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function exportDataQualityIssues(apiKey, filters = {}) {
+  const params = new URLSearchParams({ format: "csv" });
+  if (filters.status) params.set("status", filters.status);
+  const r = await fetch(`${BASE}/api/admin/data-quality/issues/export?${params}`, {
+    cache: "no-store",
+    headers: adminHeaders(apiKey),
+  });
+  const text = await r.text();
+  if (!r.ok) throw new Error(text || `Request failed with ${r.status}`);
+  return text;
+}

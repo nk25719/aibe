@@ -12,25 +12,24 @@ BASE = Path(__file__).resolve().parent
 
 
 def seed(db):
-    for path, title, revision, doc_type in [
-        ("tests/fixtures/ge_monitor_service_manual_rev_b.txt", "TM-100 Service Manual", "B", "service_manual"),
-        ("tests/fixtures/ge_monitor_bulletin.txt", "TB-77", "1", "technical_bulletin"),
-    ]:
+    fixture = json.loads((BASE / "eval_documents.json").read_text(encoding="utf-8"))
+    for item in fixture["seed_documents"]:
         ingest_document(
             db,
             DocumentIngestRequest(
-                path=str(BASE / path),
-                manufacturer="GE Healthcare",
-                equipment_model="TM-100",
-                document_type=doc_type,
-                title=title,
-                document_number=title,
-                revision=revision,
-                published_at="2026-01-01",
-                effective_at="2026-01-01",
-                language="en",
-                source="internal fixture",
-                access_classification="non_confidential_fixture",
+                path=str(BASE / item["path"]),
+                manufacturer=item["manufacturer"],
+                equipment_model=item.get("equipment_model"),
+                equipment_family=item.get("equipment_family"),
+                document_type=item["document_type"],
+                title=item["title"],
+                document_number=item.get("document_number"),
+                revision=item["revision"],
+                published_at=item.get("published_at"),
+                effective_at=item.get("effective_at"),
+                language=item.get("language", "en"),
+                source=item.get("source"),
+                access_classification=item.get("access_classification", "non_confidential_fixture"),
             ),
         )
 
@@ -38,21 +37,35 @@ def seed(db):
 def main():
     Base.metadata.create_all(bind=engine)
     fixture = json.loads((BASE / "eval_documents.json").read_text(encoding="utf-8"))
-    correct = 0
-    unsupported_correct = 0
+    cases = fixture["cases"] if isinstance(fixture, dict) else fixture
+    retrieval_hit = citation_doc = citation_revision = citation_page = unsupported_correct = cross_model_clean = separation_ok = 0
+    by_category = {}
     with SessionLocal() as db:
         seed(db)
         results = []
-        for item in fixture:
+        for item in cases:
             response = answer_question(db, TechnicalQuestionRequest(**{k: v for k, v in item.items() if k in {"question", "manufacturer", "model"}}))
             first = response["evidence"][0] if response["evidence"] else None
-            ok = (
-                (first is None and item["expected_document"] is None)
-                or (first and first["document_title"] == item["expected_document"] and first["page"] == item["expected_page"])
-            )
-            correct += int(ok)
-            unsupported_correct += int(first is None and item["expected_document"] is None)
-            results.append({"question": item["question"], "ok": ok, "first_evidence": first})
+            expected_document = item["expected_document"]
+            expected_revision = item.get("expected_revision")
+            expected_page = item.get("expected_page")
+            doc_ok = bool(first and first["document_title"] == expected_document) if expected_document else first is None
+            revision_ok = bool(first and first["revision"] == expected_revision) if expected_revision else first is None
+            page_ok = bool(first and first["page"] == expected_page) if expected_page else first is None
+            unsupported_ok = bool(item.get("unsupported") and not response["evidence"] and ("not invent" in response["answer"].lower() or response["missing_information"]))
+            retrieval_hit += int(bool(first) == bool(expected_document))
+            citation_doc += int(doc_ok)
+            citation_revision += int(revision_ok)
+            citation_page += int(page_ok)
+            unsupported_correct += int(unsupported_ok)
+            if item.get("category") == "wrong_equipment_model":
+                cross_model_clean += int(not response["evidence"])
+            separation_ok += int(all("extracted_fact" in evidence for evidence in response["evidence"]) and isinstance(response["inferences"], list))
+            category = item["category"]
+            bucket = by_category.setdefault(category, {"cases": 0, "document_hits": 0})
+            bucket["cases"] += 1
+            bucket["document_hits"] += int(doc_ok)
+            results.append({"case_id": item["case_id"], "category": category, "document_ok": doc_ok, "revision_ok": revision_ok, "page_ok": page_ok, "first_evidence": first})
         trouble = create_troubleshooting_case(
             db,
             TroubleshootingRequest(
@@ -63,14 +76,26 @@ def main():
                 software_version="2.1",
             ),
         )
+    total = len(cases) or 1
+    unsupported_total = max(1, sum(1 for case in cases if case.get("unsupported")))
+    wrong_model_total = max(1, sum(1 for case in cases if case.get("category") == "wrong_equipment_model"))
+    for bucket in by_category.values():
+        bucket["citation_document_accuracy"] = bucket["document_hits"] / bucket["cases"]
     print(
         json.dumps(
             {
-                "retrieval_cases": len(fixture),
-                "citation_accuracy": correct / len(fixture),
-                "unsupported_refusal_cases_correct": unsupported_correct,
+                "dataset": fixture.get("dataset", {}) if isinstance(fixture, dict) else {},
+                "retrieval_cases": len(cases),
+                "retrieval_hit_rate": retrieval_hit / total,
+                "citation_document_accuracy": citation_doc / total,
+                "citation_revision_accuracy": citation_revision / total,
+                "citation_page_accuracy": citation_page / total,
+                "unsupported_question_refusal_accuracy": unsupported_correct / unsupported_total,
+                "cross_model_contamination_rate": 1 - (cross_model_clean / wrong_model_total),
+                "fact_inference_separation_rate": separation_ok / total,
                 "troubleshooting_evidence_count": len(trouble["relevant_documents"]),
-                "note": "Tiny non-confidential fixtures; not production retrieval accuracy.",
+                "per_category": by_category,
+                "note": "Small non-confidential fixtures; not production retrieval accuracy.",
                 "results": results,
             },
             indent=2,

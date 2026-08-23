@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
 
 
@@ -36,3 +37,21 @@ def test_admin_import_requires_api_key():
     response = client.post("/api/admin/import-parts")
 
     assert response.status_code in {403, 503}
+
+
+def test_admin_review_endpoints_require_api_key():
+    response = client.get("/api/admin/import-runs")
+
+    assert response.status_code in {403, 503}
+
+
+def test_admin_review_endpoints_accept_api_key(monkeypatch):
+    monkeypatch.setattr(settings, "api_key", "test-key")
+
+    runs = client.get("/api/admin/import-runs", headers={"X-AIBE-API-Key": "test-key"})
+    issues = client.get("/api/admin/data-quality/issues", headers={"X-AIBE-API-Key": "test-key"})
+
+    assert runs.status_code == 200
+    assert runs.json()["ok"] is True
+    assert issues.status_code == 200
+    assert issues.json()["ok"] is True

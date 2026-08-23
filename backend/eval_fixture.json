@@ -1,25 +1,100 @@
-[
-  {
-    "label": "calibration regulator",
-    "manufacturer": "GE Healthcare",
-    "equipment_model": "E-sCaiO",
-    "visible_markings": "755534",
-    "expected_part_number": "755534-HEL",
-    "image": "images/755534-HEL 1.jpeg"
+{
+  "dataset": {
+    "name": "aibe_non_confidential_part_identification_fixture",
+    "version": "2026-08-23",
+    "provenance": "curated_non_confidential_smoke_cases",
+    "warning": "This fixture is intentionally small and partly synthetic. It is a regression check, not production accuracy evidence."
   },
-  {
-    "label": "sample line",
-    "manufacturer": "GE Healthcare",
-    "description": "Sample Line",
-    "visible_markings": "852553",
-    "expected_part_number": "852553",
-    "image": "images/755534-HEL 1.jpeg"
-  },
-  {
-    "label": "filter fan",
-    "manufacturer": "GE Healthcare",
-    "description": "filter fan",
-    "expected_part_number": "1009-3064-000",
-    "image": "images/755534-HEL 1.jpeg"
-  }
-]
+  "cases": [
+    {
+      "case_id": "part-exact-001",
+      "category": "exact_part_number",
+      "input_type": "text_and_image",
+      "text_query": "755534-HEL",
+      "partial_part_number": "755534-HEL",
+      "manufacturer": "GE Healthcare",
+      "equipment_model": "E-sCaiO",
+      "image_paths": ["images/755534-HEL 1.jpeg"],
+      "expected_part": "755534-HEL",
+      "acceptable_candidates": ["755534-HEL"],
+      "excluded_parts": [],
+      "evidence_expectation": "spreadsheet_or_legacy_row",
+      "difficulty": "easy",
+      "notes": "Curated from local non-confidential sample data."
+    },
+    {
+      "case_id": "part-partial-001",
+      "category": "partial_part_number",
+      "input_type": "text_and_image",
+      "text_query": "visible marking 852553",
+      "partial_part_number": "852553",
+      "manufacturer": "GE Healthcare",
+      "image_paths": ["images/755534-HEL 1.jpeg"],
+      "expected_part": "852553",
+      "acceptable_candidates": ["852553"],
+      "excluded_parts": [],
+      "evidence_expectation": "spreadsheet_or_legacy_row",
+      "difficulty": "easy",
+      "notes": "Uses unrelated sample image so text evidence should dominate."
+    },
+    {
+      "case_id": "part-description-001",
+      "category": "description",
+      "input_type": "text_and_image",
+      "text_query": "filter fan",
+      "manufacturer": "GE Healthcare",
+      "image_paths": ["images/755534-HEL 1.jpeg"],
+      "expected_part": "1009-3064-000",
+      "acceptable_candidates": ["1009-3064-000"],
+      "excluded_parts": [],
+      "evidence_expectation": "spreadsheet_or_legacy_row",
+      "difficulty": "medium",
+      "notes": "Description-driven case."
+    },
+    {
+      "case_id": "part-manufacturer-model-001",
+      "category": "manufacturer_plus_model",
+      "input_type": "text_and_image",
+      "text_query": "calibration gas",
+      "manufacturer": "GE Healthcare",
+      "equipment_model": "E-sCaiO",
+      "image_paths": ["images/755534-HEL 1.jpeg"],
+      "expected_part": "755534-HEL",
+      "acceptable_candidates": ["755534-HEL"],
+      "excluded_parts": [],
+      "evidence_expectation": "manufacturer_and_model_factor",
+      "difficulty": "medium",
+      "notes": "Checks model context affects ranking but remains candidate-only."
+    },
+    {
+      "case_id": "part-unknown-001",
+      "category": "unknown_part",
+      "input_type": "text_and_image",
+      "text_query": "ZZZ-UNKNOWN noncatalog widget",
+      "partial_part_number": "ZZZ-UNKNOWN",
+      "manufacturer": "Nonexistent Maker",
+      "image_paths": ["images/755534-HEL 1.jpeg"],
+      "expected_part": null,
+      "acceptable_candidates": [],
+      "excluded_parts": ["755534-HEL"],
+      "evidence_expectation": "no_supported_confirmation",
+      "difficulty": "hard",
+      "notes": "Synthetic negative case."
+    },
+    {
+      "case_id": "part-conflicting-001",
+      "category": "conflicting_evidence",
+      "input_type": "text_and_image",
+      "text_query": "calibration gas",
+      "manufacturer": "GE Healthcare",
+      "equipment_model": "Unrelated Model",
+      "image_paths": ["images/755534-HEL 1.jpeg"],
+      "expected_part": null,
+      "acceptable_candidates": [],
+      "excluded_parts": [],
+      "evidence_expectation": "candidate_must_show_contradiction",
+      "difficulty": "hard",
+      "notes": "Synthetic conflict case; candidate presence is acceptable only if contradictions are surfaced."
+    }
+  ]
+}
