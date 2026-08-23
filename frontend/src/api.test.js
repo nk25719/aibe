@@ -6,9 +6,13 @@ import {
   createIdentificationCase,
   getDataQualityIssues,
   getImportRuns,
+  askTechnicalQuestion,
   exportDataQualityIssues,
+  listDocuments,
   resolveDataQualityIssue,
   searchParts,
+  updateDocumentVersionState,
+  uploadTechnicalDocument,
 } from "./api";
 
 afterEach(() => {
@@ -119,5 +123,55 @@ describe("api helpers", () => {
     expect(url).toContain("format=csv");
     expect(options.headers["X-AIBE-API-Key"]).toBe("secret");
     expect(csv).toContain("id,status");
+  });
+
+  it("lists technical documents with filters", async () => {
+    const fetchMock = vi.fn(() => mockResponse({ body: JSON.stringify({ ok: true, documents: [] }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listDocuments({ q: "ERR-101", document_type: "service_manual", lifecycle_status: "current", limit: 25 });
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).toContain("/api/documents?");
+    expect(url).toContain("q=ERR-101");
+    expect(url).toContain("document_type=service_manual");
+    expect(url).toContain("lifecycle_status=current");
+  });
+
+  it("asks technical questions with JSON payloads", async () => {
+    const fetchMock = vi.fn(() => mockResponse({ body: JSON.stringify({ ok: true, evidence: [] }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await askTechnicalQuestion({ question: "ERR-101", manufacturer: "GE Healthcare", model: "TM-100" });
+
+    const [, options] = fetchMock.mock.calls[0];
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body).model).toBe("TM-100");
+  });
+
+  it("uploads technical PDFs with the admin key", async () => {
+    const fetchMock = vi.fn(() => mockResponse({ body: JSON.stringify({ ok: true, document_id: 1 }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const file = new File(["pdf"], "manual.pdf", { type: "application/pdf" });
+
+    await uploadTechnicalDocument("secret", file, { title: "Manual", document_type: "service_manual", manufacturer: "GE" });
+
+    const [, options] = fetchMock.mock.calls[0];
+    expect(options.method).toBe("POST");
+    expect(options.headers["X-AIBE-API-Key"]).toBe("secret");
+    expect(options.body.get("file")).toBe(file);
+    expect(options.body.get("document_type")).toBe("service_manual");
+  });
+
+  it("updates document version state through protected endpoint", async () => {
+    const fetchMock = vi.fn(() => mockResponse({ body: JSON.stringify({ ok: true }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await updateDocumentVersionState("secret", 9, { status: "current", actor: "nk" });
+
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toContain("/api/documents/versions/9/state");
+    expect(options.headers["X-AIBE-API-Key"]).toBe("secret");
+    expect(JSON.parse(options.body).status).toBe("current");
   });
 });

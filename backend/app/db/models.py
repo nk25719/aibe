@@ -51,6 +51,36 @@ class ImportRunStatus(str, enum.Enum):
     failed = "failed"
 
 
+class DocumentType(str, enum.Enum):
+    service_manual = "service_manual"
+    user_manual = "user_manual"
+    parts_catalog = "parts_catalog"
+    technical_bulletin = "technical_bulletin"
+    field_modification = "field_modification"
+    safety_notice = "safety_notice"
+    eol_notice = "eol_notice"
+    eosl_notice = "eosl_notice"
+    replacement_notice = "replacement_notice"
+    installation_manual = "installation_manual"
+    maintenance_procedure = "maintenance_procedure"
+    training_material = "training_material"
+    other = "other"
+
+
+class DocumentLifecycleStatus(str, enum.Enum):
+    draft = "draft"
+    current = "current"
+    superseded = "superseded"
+    withdrawn = "withdrawn"
+
+
+class DocumentIngestionStatus(str, enum.Enum):
+    pending = "pending"
+    processing = "processing"
+    ready = "ready"
+    failed = "failed"
+
+
 class DataQualityIssueStatus(str, enum.Enum):
     open = "open"
     under_review = "under_review"
@@ -273,6 +303,8 @@ class Document(TimestampMixin, Base):
     document_type: Mapped[str | None] = mapped_column(String(100))
     document_number: Mapped[str | None] = mapped_column(String(255), index=True)
     manufacturer_id: Mapped[int | None] = mapped_column(ForeignKey("manufacturers.id"), index=True)
+    equipment_family_id: Mapped[int | None] = mapped_column(ForeignKey("equipment_families.id"), index=True)
+    equipment_model_id: Mapped[int | None] = mapped_column(ForeignKey("equipment_models.id"), index=True)
     manufacturer_text: Mapped[str | None] = mapped_column(String(255), index=True)
     equipment_family_text: Mapped[str | None] = mapped_column(String(255), index=True)
     equipment_model_text: Mapped[str | None] = mapped_column(String(255), index=True)
@@ -282,6 +314,8 @@ class Document(TimestampMixin, Base):
     internal_reference: Mapped[str | None] = mapped_column(String(500))
     ingestion_status: Mapped[str | None] = mapped_column(String(100), index=True)
     ingestion_errors: Mapped[dict | None] = mapped_column(JSON)
+    verification_status: Mapped[str] = mapped_column(String(100), default="unverified", nullable=False, index=True)
+    notes: Mapped[str | None] = mapped_column(Text)
 
 
 class DocumentVersion(TimestampMixin, Base):
@@ -291,7 +325,16 @@ class DocumentVersion(TimestampMixin, Base):
     revision: Mapped[str] = mapped_column(String(100), nullable=False)
     published_at: Mapped[Date | None] = mapped_column(Date)
     effective_at: Mapped[Date | None] = mapped_column(Date)
-    file_sha1: Mapped[str | None] = mapped_column(String(64))
+    expires_at: Mapped[Date | None] = mapped_column(Date)
+    lifecycle_status: Mapped[str] = mapped_column(String(100), default="draft", nullable=False, index=True)
+    superseded_by_version_id: Mapped[int | None] = mapped_column(ForeignKey("document_versions.id"), index=True)
+    file_sha1: Mapped[str | None] = mapped_column(String(64), index=True)
+    file_sha256: Mapped[str | None] = mapped_column(String(64), index=True)
+    original_filename: Mapped[str | None] = mapped_column(String(500))
+    mime_type: Mapped[str | None] = mapped_column(String(255))
+    file_size: Mapped[int | None] = mapped_column(Integer)
+    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime)
+    uploaded_by: Mapped[str | None] = mapped_column(String(255))
     source_path: Mapped[str | None] = mapped_column(String(1000))
     duplicate_of_version_id: Mapped[int | None] = mapped_column(ForeignKey("document_versions.id"), index=True)
     __table_args__ = (UniqueConstraint("document_id", "revision", name="uq_document_revision"),)
